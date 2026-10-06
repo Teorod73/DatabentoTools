@@ -1,0 +1,8 @@
+bin/
+obj/
+publish/
+*.user
+.vs/
+tests/test_*
+tests/out_*
+tests/diag_*
