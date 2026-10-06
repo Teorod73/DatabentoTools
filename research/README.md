@@ -12,3 +12,8 @@ Python feldolgozás a DatabentoExtract kimenetén (`pip install numpy pandas mat
 
 Alapbeállítások (`Settings`): value area 68%, sigma multiplier 0.25, min prominence 5%, max valley 50%,
 HVN min asymmetry 0.8, max overshoot 0.25, forgalommal súlyozva, a besorolás az 1 perces záróárakból.
+- `zigzag.py`: a ZigZagAtr indikátor TimeOfDay üzemmódja (ATR 14 nap, profil 10 nap, 30 perces sávok) az 1 perces
+  gyertyákon; kontraktusváltáskor újraindul. `plot_zigzag.py`: ábra az indikátorral való összevetéshez.
+- `reverse_study.py <resultsDir> <extractDir> <outDir> [lastSession]`: fordított vizsgálat, a 0,3 és 0,5 fordulók
+  hány százaléka esik egy zónára, a véletlenszerűen eltolt zónákhoz képest (csak a fejlesztési időszak, alapból
+  2025-12-31-ig). `analyze_reverse.py <swing_hits.csv.gz> <summary.md>`: összefoglaló táblázatok.
