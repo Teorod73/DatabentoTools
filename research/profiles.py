@@ -207,72 +207,108 @@ def prominence_clusters(prices: np.ndarray, volumes: np.ndarray, s: Settings):
 
 
 def classify_hvns(hvns: list[dict], closes: np.ndarray, bar_volumes: np.ndarray, s: Settings) -> None:
-    """Upper HVN: the bar closes were below the zone and above it only shortly or shallowly, Lower: the opposite."""
-    weights = bar_volumes.astype(float) if s.hvn_volume_weighted else np.ones(len(closes))
-    total = weights.sum()
+    """Upper HVN: the bar closes were below the zone and above it only shortly or shallowly, Lower: the opposite.
+    Both variants are calculated: weighted by the bar volume (kind_w, asymmetry_w, overshoot_w) and unweighted
+    (kind_u, ...). "kind" is the one selected by s.hvn_volume_weighted."""
     half = TICK / 2
+    for weighted, suffix in ((True, "_w"), (False, "_u")):
+        weights = bar_volumes.astype(float) if weighted else np.ones(len(closes))
+        total = weights.sum()
+        for h in hvns:
+            kind = "neutral"
+            above = (weights * np.maximum(0, closes - (h["high"] + half))).sum()
+            below = (weights * np.maximum(0, h["low"] - half - closes)).sum()
+            total_overshoot = above + below
+            height = h["high"] - h["low"] + TICK
+            asymmetry = (below - above) / total_overshoot if total_overshoot > 0 else 0.0
+            overshoot = min(above, below) / (height * total) if total > 0 else 0.0
+            if s.classify_hvns and total_overshoot > 0 and overshoot <= s.hvn_max_overshoot:
+                if asymmetry >= s.hvn_min_asymmetry:
+                    kind = "upper"
+                elif asymmetry <= -s.hvn_min_asymmetry:
+                    kind = "lower"
+            h["kind" + suffix], h["asymmetry" + suffix], h["overshoot" + suffix] = kind, asymmetry, overshoot
     for h in hvns:
-        h["kind"] = "neutral"
-        if not s.classify_hvns or total <= 0:
-            continue
-        above = (weights * np.maximum(0, closes - (h["high"] + half))).sum()
-        below = (weights * np.maximum(0, h["low"] - half - closes)).sum()
-        total_overshoot = above + below
-        height = h["high"] - h["low"] + TICK
-        h["asymmetry"] = (below - above) / total_overshoot if total_overshoot > 0 else 0.0
-        h["overshoot"] = min(above, below) / (height * total)
-        if total_overshoot > 0 and h["overshoot"] <= s.hvn_max_overshoot:
-            if h["asymmetry"] >= s.hvn_min_asymmetry:
-                h["kind"] = "upper"
-            elif h["asymmetry"] <= -s.hvn_min_asymmetry:
-                h["kind"] = "lower"
+        suffix = "_w" if s.hvn_volume_weighted else "_u"
+        h["kind"], h["asymmetry"], h["overshoot"] = h["kind" + suffix], h["asymmetry" + suffix], h["overshoot" + suffix]
 
 
 def minute_bars(seconds: pd.DataFrame) -> pd.DataFrame:
-    """1 minute bars (close, volume) of one instrument from the second bars, labeled by the minute start."""
+    """1 minute bars of one instrument from the second bars, labeled by the minute start (UTC seconds)."""
     df = seconds.assign(minute=seconds.utc_second - seconds.utc_second % 60)
     g = df.groupby("minute", sort=True)
-    return pd.DataFrame({"close": g.close.last(), "volume": g.volume.sum()}).reset_index()
+    return pd.DataFrame({"open": g.open.first(), "high": g.high.max(), "low": g.low.min(), "close": g.close.last(),
+                         "volume": g.volume.sum(), "buy": g.buy.sum(), "sell": g.sell.sum()}).reset_index()
 
 
 # ---------------------------------------------------------------------------------------------- sessions
 
+def iter_sessions(directory: str):
+    """(session, minute rows, second bars) of every session, reading the UTC day files one after the other.
+    A session ends at 17:00 ET, which is inside the UTC day of the same date, so after reading the file of a date
+    every session up to that date is complete."""
+    def day_files(kind):
+        return {os.path.basename(f)[:-7]: f for f in glob.glob(os.path.join(directory, kind, "*.csv.gz"))}
+
+    minute_files, second_files = day_files("minute"), day_files("seconds")
+    pending_m, pending_s = [], []
+
+    for name in sorted(minute_files):
+        pending_m.append(add_session(pd.read_csv(minute_files[name]), "utc_minute"))
+        if name in second_files:
+            pending_s.append(add_session(pd.read_csv(second_files[name]), "utc_second"))
+        day = pd.Timestamp(name[-8:])
+        minutes = pd.concat(pending_m, ignore_index=True)
+        seconds = pd.concat(pending_s, ignore_index=True) if pending_s else pd.DataFrame(columns=["session"])
+        for session in sorted(minutes.session[minutes.session <= day].unique()):
+            yield session, minutes[minutes.session == session], seconds[seconds.session == session]
+        pending_m = [minutes[minutes.session > day]]
+        pending_s = [seconds[seconds.session > day]]
+
+    minutes = pd.concat(pending_m, ignore_index=True)
+    seconds = pd.concat(pending_s, ignore_index=True)
+    for session in sorted(minutes.session.unique()):
+        yield session, minutes[minutes.session == session], seconds[seconds.session == session]
+
+
+def session_profile(session, day: pd.DataFrame, seconds: pd.DataFrame, symbols: dict[int, str], s: Settings):
+    """Profile of the front contract of one session and its 1 minute bars, None without outright trades."""
+    day = day.assign(volume=day.buy + day.sell + day.unknown)
+    # only outrights: spread symbols have a dash, without symbols the spread prices are far below the outright ones
+    is_spread = day.instrument_id.map(lambda i: "-" in symbols.get(i, "")).astype(bool) | (day.price < 1000)
+    outright = day[~is_spread]
+    if outright.empty:
+        return None, None
+    front = int(outright.groupby("instrument_id").volume.sum().idxmax())
+    rows = outright[outright.instrument_id == front].groupby("price").agg(
+        volume=("volume", "sum"), buy=("buy", "sum"), sell=("sell", "sum")).sort_index()
+
+    bars = seconds[seconds.instrument_id == front]
+    profile = Profile(
+        session=session, instrument_id=front, symbol=symbols.get(front, str(front)),
+        start=bars.et.min(), end=bars.et.max(),
+        prices=rows.index.to_numpy(float), volumes=rows.volume.to_numpy(float),
+        buys=rows.buy.to_numpy(float), sells=rows.sell.to_numpy(float))
+    profile.complete = bool(
+        profile.start.tz_localize(None) <= session - pd.Timedelta(hours=5, minutes=50) and
+        profile.end.tz_localize(None) >= session + pd.Timedelta(hours=16, minutes=50))
+    profile.high, profile.low = profile.prices.max(), profile.prices.min()
+    profile.poc, profile.vah, profile.val = value_area(profile.prices, profile.volumes, s.value_area_percentage)
+    profile.smoothed, profile.hvns, profile.lvns = prominence_clusters(profile.prices, profile.volumes, s)
+
+    mb = minute_bars(bars)
+    classify_hvns(profile.hvns, mb.close.to_numpy(float), mb.volume.to_numpy(float), s)
+    return profile, mb.assign(session=session, instrument_id=front)
+
+
 def session_profiles(directory: str, s: Settings | None = None) -> list[Profile]:
     s = s or Settings()
-    minutes = add_session(read_extract(directory, "minute"), "utc_minute")
-    seconds = add_session(read_extract(directory, "seconds"), "utc_second")
     symbols = read_symbols(directory)
-
-    minutes["volume"] = minutes.buy + minutes.sell + minutes.unknown
     profiles = []
-
-    for session, day in minutes.groupby("session", sort=True):
-        # only outrights: spread symbols have a dash, without symbols the spread prices are far below the outright ones
-        is_spread = day.instrument_id.map(lambda i: "-" in symbols.get(i, "")).astype(bool) | (day.price < 1000)
-        outright = day[~is_spread]
-        if outright.empty:
-            continue
-        front = int(outright.groupby("instrument_id").volume.sum().idxmax())
-        rows = outright[outright.instrument_id == front].groupby("price").agg(
-            volume=("volume", "sum"), buy=("buy", "sum"), sell=("sell", "sum")).sort_index()
-
-        bars = seconds[(seconds.session == session) & (seconds.instrument_id == front)]
-        profile = Profile(
-            session=session, instrument_id=front, symbol=symbols.get(front, str(front)),
-            start=bars.et.min(), end=bars.et.max(),
-            prices=rows.index.to_numpy(float), volumes=rows.volume.to_numpy(float),
-            buys=rows.buy.to_numpy(float), sells=rows.sell.to_numpy(float))
-        profile.complete = bool(
-            profile.start.tz_localize(None) <= session - pd.Timedelta(hours=5, minutes=50) and
-            profile.end.tz_localize(None) >= session + pd.Timedelta(hours=16, minutes=50))
-        profile.high, profile.low = profile.prices.max(), profile.prices.min()
-        profile.poc, profile.vah, profile.val = value_area(profile.prices, profile.volumes, s.value_area_percentage)
-        profile.smoothed, profile.hvns, profile.lvns = prominence_clusters(profile.prices, profile.volumes, s)
-
-        mb = minute_bars(bars)
-        classify_hvns(profile.hvns, mb.close.to_numpy(float), mb.volume.to_numpy(float), s)
-        profiles.append(profile)
-
+    for session, day, seconds in iter_sessions(directory):
+        profile, _ = session_profile(session, day, seconds, symbols, s)
+        if profile is not None:
+            profiles.append(profile)
     return profiles
 
 
