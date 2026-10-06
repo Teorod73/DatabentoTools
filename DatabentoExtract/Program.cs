@@ -11,7 +11,7 @@ const string Usage = """
           Every *.dbn and *.dbn.zst file of the directory, already extracted files are skipped.
 
     Options:
-      --source fills|trades   volume per price from the fills (default) or from the trades
+      --source trades|fills   volume per price from the trades (default) or from the fills
       --min-share <0..1>      instruments below this part of the largest volume of the file are not written (default 0.01)
       --parallel <n>          number of files processed at the same time (default 2)
       --force                 extract again the already extracted files
@@ -32,7 +32,7 @@ var mode = args[0];
 var input = args[1];
 var outDirectory = args[2];
 
-var source = VolumeSource.Fills;
+var source = VolumeSource.Trades;
 var minShare = 0.01;
 var parallel = 2;
 var force = false;

@@ -76,15 +76,17 @@ for n in range(30000):
             p = prices[iid] + (tick * lv if aggressor != 1 else -tick * lv)
             for _ in range(random.randint(1, 3)):
                 fills.append((p, random.randint(1, 15)))
-        total = sum(s for _, s in fills)
         trade_side = {0: d.Side.BID, 1: d.Side.ASK, 2: d.Side.NONE}[aggressor]
-        # the trade record: aggregated at the first price (the worst case for trades as volume source)
-        rec(iid, d.Action.TRADE, trade_side, fills[0][0], total, flags=0)
-        trade_volume[iid] += total
         resting = {0: d.Side.ASK, 1: d.Side.BID, 2: d.Side.NONE}[aggressor]
-        for k, (p, s) in enumerate(fills):
-            rec(iid, d.Action.FILL, resting, p, s, flags=0)
-            expect_fill(iid, p, s, aggressor)
+        # as on GLBX.MDP3: one trade record per price level, followed by the fills of that level
+        for level_price in dict.fromkeys(p for p, _ in fills):
+            level_fills = [(p, s) for p, s in fills if p == level_price]
+            total = sum(s for _, s in level_fills)
+            rec(iid, d.Action.TRADE, trade_side, level_price, total, flags=0)
+            trade_volume[iid] += total
+            for p, s in level_fills:
+                rec(iid, d.Action.FILL, resting, p, s, flags=0)
+                expect_fill(iid, p, s, aggressor)
         rec(iid, d.Action.CANCEL, resting, fills[-1][0], 0)
         prices[iid] = fills[-1][0]
 

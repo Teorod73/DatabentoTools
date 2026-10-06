@@ -7,15 +7,16 @@ namespace DatabentoExtract;
 
 public enum VolumeSource
 {
-    // fills (F) of the resting orders: one record per filled order at its own price, aggressor = opposite side
-    Fills,
-    // trades (T) of the aggressor: side = aggressor side
+    // trades (T) of the aggressor: side = aggressor side. On GLBX.MDP3 a sweep is one trade record per price level
+    // and the trade volume matches the exchange volume (checked on 2026-05-29 against the NinjaTrader profile).
     Trades,
+    // fills (F) of the resting orders, aggressor = opposite side; about 1% more volume than the trades on GLBX.MDP3
+    Fills,
 }
 
 public sealed class ExtractOptions
 {
-    public VolumeSource Source { get; init; } = VolumeSource.Fills;
+    public VolumeSource Source { get; init; } = VolumeSource.Trades;
     // instruments with less volume than this part of the largest one of the file are not written out (spreads, far contracts)
     public double MinShare { get; init; } = 0.01;
     public bool Diagnostics { get; init; }
