@@ -5,9 +5,11 @@
 Databento MBO (`.dbn` / `.dbn.zst`, DBN v1-v3) kivonatoló.
 
 ```
-DatabentoExtract diag <file.dbn.zst> <outDir>
-DatabentoExtract extract <inputDir|file> <outDir> [--source fills|trades] [--min-share 0.01] [--parallel 2] [--force]
+.\DatabentoExtract.exe diag <file.dbn.zst> <outDir>
+.\DatabentoExtract.exe extract <inputDir|file> <outDir> [--source fills|trades] [--min-share 0.01] [--parallel 2] [--force]
 ```
+
+PowerShellben az aktuális mappában lévő programot `.\` előtaggal kell indítani.
 
 Kimenet fájlonként:
 
