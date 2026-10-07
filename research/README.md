@@ -28,3 +28,6 @@ HVN min asymmetry 0.8, max overshoot 0.25, forgalommal súlyozva, a besorolás a
   gyertyákon (megerősítés a touch-perc vége után, 15 percen belül), strukturális célokkal (az első zóna legalább
   1R / 2R távolságra, `room` = a legközelebbi zóna távolsága R-ben) és hírablakkal (08:30, 10:00, 14:00, 14:30
   percek legalább 3x szokásos forgalommal, -10..+20 perc). `analyze_refine.py <refineDir>`: összefoglaló.
+- `holdout.py export|evaluate <holdoutDir>`: a rögzített szabály (2026-10-07, a küszöbök számként befagyasztva) egyszeri
+  próbája a 2026-os időszakon. Előtte `event_study.py <resultsDir> <extractDir> <holdoutDir> 2026-12-31`, az `export`
+  után a DatabentoExtract `book` a 2026-os fájlokon a `book_events_2026.csv`-vel, a kimenet `<holdoutDir>/book`.
