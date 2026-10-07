@@ -1,0 +1,97 @@
+# Projekt-emlékeztető Claude-nak
+
+Ez a fájl az előző beszélgetések összefoglalója, hogy egy új beszélgetés onnan folytathassa. Olvasd el, mielőtt
+bármit csinálsz. Ha valami ellentmond a kódnak, a kód az igaz, és ezt jelezd. Ha a projekt állása változik
+(új eredmény, új döntés), frissítsd ezt a fájlt is.
+
+## A felhasználó és a munkamód
+
+- Magyarul beszélünk. A kód, a commit üzenetek és a kódkommentek angolul vannak, a README-k magyarul.
+- **Csak akkor kódolj, ha kifejezetten kéri.** Kérdésre válaszolj, tervet írj le, de ne kezdj kódolni magadtól.
+- Nem használ ágakat: **minden közvetlenül a `master`-re megy** (DatabentoTools, ResearchData, Custom).
+- Windowson dolgozik PowerShellben (`.\` prefix kell a programokhoz). Útvonalak nála:
+  - nyers Databento fájlok: `C:\Users\istva\Documents\NinjaDataBridge\Databento_ES` (2026: `...\Databento_ES\2026`)
+  - ResearchData klón: `C:\Users\istva\Documents\NinjaDataBridge\Databento_ES\research\extract`
+  - DatabentoTools klón: `C:\Users\istva\Documents\NinjaDataBridge\Databento_ES\DatabentoTools`
+- A nyers `.dbn.zst` fájlok csak nála vannak: a C# futtatásokat (extract, book) ő végzi és tölti fel.
+- Őszinte értékelést vár: a bizonytalanságot, a lookaheadet és azt, hogy egy év független-e, mindig mondd meg.
+
+## Repók
+
+- **Teorod73/Custom** (NinjaTrader 8 `bin\Custom`): NinjaScript. `Indicators/GM/ZigZagAtr.cs` (Atr / NightDay /
+  TimeOfDay referencia), `AddOns/GM/...` (VolumeProfileTool: ValueArea, WindowClusters, VolumeProfileRenderer).
+  A NinjaTrader minden `.cs`-t lefordít, ezért konzolprogram nem kerülhet ide. A "NinjaScript generated code"
+  régiót soha ne írd kézzel.
+- **Teorod73/DatabentoTools** (ez a repó): `DatabentoExtract/` C# konzolprogram (.NET 8, RollForward Major,
+  ZstdSharp), `research/` Python elemzés, `tests/` szintetikus bájtpontos tesztek. Részletek: `README.md`,
+  `research/README.md`.
+- **Teorod73/ResearchData**: `minute/`, `seconds/`, `instruments/` (az extract kimenete) és `results/`
+  (`sessions.csv`, `levels.csv`, `bars_1min.csv.gz`, `reverse/`, `events/`, `book/`, `book_analysis/`, `refine/`,
+  `holdout/`). A cloud környezetben `/home/user/researchdata`-ba klónozva használtuk.
+
+## Adat
+
+- ES, Databento GLBX MDP3 MBO, napi UTC fájlok minden kontraktussal, 2024-01-01 – 2026-10-04.
+- Seansz 18:00–17:00 ET, front kontraktus forgalom szerint, roll spread a perces adatból.
+- Éjszaka (overnight) 20:00–09:30, IB 09:30–10:30 ET.
+- **Fejlesztési időszak: 2024–2025. 2026 = holdout, egyszer lefuttatva (2026-10-07), már elhasználva.**
+  Új, tiszta teszt csak a 2026 októberétől érkező élő adat lehet.
+
+## A folyamat (szkriptek)
+
+1. `DatabentoExtract extract` → perc/másodperc gyertyák, árankénti agresszor-volumen.
+2. `build_sessions.py` → seanszok, volume profile (VAH/VAL/POC, value area 68%), Prominence HVN/LVN,
+   Upper/Lower HVN besorolás kétféleképpen (`_w` forgalommal súlyozott, `_u` súlyozatlan; az elemzések `_u`-t
+   használnak, `weighting != "w"`). NinjaTraderrel egyeztetve.
+3. `zigzag.py`, `reverse_study.py` → fordított vizsgálat: a ZigZag (TimeOfDay, 0,3 és 0,5) fordulói mennyivel
+   gyakrabban esnek zónára, mint eltolt zónára (lift ~1,13–1,17; irányfüggő: VAH/high/ONH csúcsnál, VAL/low/ONL/
+   Lower HVN aljnál 1,4–1,9; régi szintek és kerek számok ≈ véletlen).
+4. `event_study.py` → minden zónaérintés szimulált fordulós kötés (limit és megerősítéses belépés), nettó R,
+   összevetve véletlenszerűen ±0,1–0,5 ATR-rel eltolt zónákkal. Önmagában minden változat enyhén negatív.
+5. `export_book_events.py` → `DatabentoExtract book` → `book_analysis.py`: könyv- és orderflow-jellemzők az
+   érintések körül (elő-ablak 5 perc, touch-perc W1, 3 perc W3, sáv = zóna ± 0,03 ATR).
+6. `refine_study.py` / `analyze_refine.py`: másodperces belépés, strukturális célok, hírszűrő → egyik sem javított.
+7. `holdout.py` → a rögzített szabály egyszeri próbája 2026-on. `position_study.py` → egy pozíció egyszerre.
+8. `plot_rule.py` → a szabály ábrája (a teszt függvényeiből számolva), `research/figures/`.
+
+## A rögzített szabály (holdout.py, 2026-10-07)
+
+- Zóna a „jó oldalán” (`event_study.EXPECTED`: high/vah/onh/ibh/hvn_upper short, low/val/onl/ibl/hvn_lower long,
+  a többi mindkét irány), teljes seansz, nem 17:00 után.
+- Érintés: perces gyertya eléri a zóna ± 0,03 ATR sávot, miután egy gyertya teljesen ≥ 0,15 ATR-re volt.
+  ATR = az előző 14 seansz true range átlaga.
+- Konfluencia ≥ 3 (legalább 3 másik különböző zóna 0,1 ATR-en belül).
+- Kizáró könyvszabály (bármelyik teljesül → nincs kötés; hiányzó adat nem zár ki), küszöbök a 2024-es valódi
+  érintések q80/q20 értékei:
+  - `attack_vs_resting_1` (támadó volumen a sávban a touch-percben / (nyugvó védekező méret T0-kor + 1)) > 0,8242
+  - `large_att_1` (≥ 20 kontraktusos támadó kötések száma a sávban) ≥ 13
+  - `pre_attack_delta` (az előző 5 perc deltája a támadás irányában) > 0,1361
+  - `added_vs_filled_1` (betett védekező méret / (teljesült + 1)) < 4,835
+  - `defense_kept_1` (nyugvó védekező méret a perc végén / T0-kor) < 0,7007
+- Belépés: az érintés percétől 15 percen belül az első perc, amely legalább 0,05 ATR-rel a közeli szél mögé zár,
+  annak záróárán. Ha előtte az ár 0,30 ATR-rel túlmegy a túlsó szélen: nincs kötés.
+- Stop: a szélsőérték az érintéstől a megerősítésig ± (0,05 ATR + 1 tick), nem mozdul. Cél: 2R.
+  240 perc vagy seansz vége után kilépés záróáron. Költség: stopnál 1 tick csúszás, 0,08 pont jutalék.
+- Az ATR-szorzók (0,03 / 0,05 / 0,15 / 0,30) előre választottak, nem optimalizáltak. Érzékenységvizsgálat még
+  nem készült (csak 2024–2025-ön lenne szabad).
+
+## Eredmények (nettó R/kötés, ± 95%, seanszonként klaszterezve)
+
+| | 2024 | 2025 | 2026 (holdout) |
+|---|---|---|---|
+| szabály, minden jel | +0,01 | +0,11 | +0,11 ±0,09 (szigorú kritérium: „strong pass”) |
+| szabály, egy pozíció egyszerre | +0,07 ±0,13 | +0,10 ±0,10 | +0,15 ±0,11, +88R, max DD 15R |
+| ugyanez eltolt zónákon | −0,11 | −0,01 | −0,06 |
+
+- 2025 nem független ellenőrzés (a jellemzőket mindkét év alapján választottam), 2026 az.
+- Short minden évben erősebb (2026: short +0,21, long +0,10, egy pozícióval). Utólagos bontás, nem hangolni rá.
+- Kockázat mediánja kb. 10 pont (0,11 ATR); nyerési arány (2R) kb. 31–34%.
+
+## Nyitott kérdések, következő lépések
+
+- Élő próba NinjaTrader stratégiaként, sim számlán, egy pozícióval, 2026 októberétől.
+- Gond: a NinjaTrader Level 2 csak ~10 árszintet ad, a sáv 21–45 tick is lehet, a C# viszont teljes MBO könyvből
+  számolt. Dönteni kell: mélyebb adatforrás, vagy a jellemzők átdefiniálása a látható szintekre (ez új szabály,
+  2024–2025-ön újra kell ellenőrizni).
+- Érzékenységvizsgálat az ATR-szorzókra 2024–2025-ön.
+- NQ még nem volt vizsgálva.
