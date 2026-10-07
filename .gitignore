@@ -6,3 +6,4 @@ publish/
 tests/test_*
 tests/out_*
 tests/diag_*
+__pycache__/

@@ -24,3 +24,7 @@ HVN min asymmetry 0.8, max overshoot 0.25, forgalommal súlyozva, a besorolás a
 - `export_book_events.py <resultsDir> <events.csv.gz> <book_events.csv>`: az érintések listája a DatabentoExtract
   `book` futtatásához. `book_analysis.py <resultsDir> <outDir>`: a könyv- és orderflow-jellemzők összevetése a
   megerősítéses belépés eredményével, 2024 / 2025 bontásban, a jelölt kizáró szabállyal.
+- `refine_study.py <resultsDir> <extractDir> <outDir>`: a jó oldali érintések újraszimulálása másodperces
+  gyertyákon (megerősítés a touch-perc vége után, 15 percen belül), strukturális célokkal (az első zóna legalább
+  1R / 2R távolságra, `room` = a legközelebbi zóna távolsága R-ben) és hírablakkal (08:30, 10:00, 14:00, 14:30
+  percek legalább 3x szokásos forgalommal, -10..+20 perc). `analyze_refine.py <refineDir>`: összefoglaló.
