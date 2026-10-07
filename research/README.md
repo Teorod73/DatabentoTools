@@ -17,3 +17,7 @@ HVN min asymmetry 0.8, max overshoot 0.25, forgalommal súlyozva, a besorolás a
 - `reverse_study.py <resultsDir> <extractDir> <outDir> [lastSession]`: fordított vizsgálat, a 0,3 és 0,5 fordulók
   hány százaléka esik egy zónára, a véletlenszerűen eltolt zónákhoz képest (csak a fejlesztési időszak, alapból
   2025-12-31-ig). `analyze_reverse.py <swing_hits.csv.gz> <summary.md>`: összefoglaló táblázatok.
+- `event_study.py <resultsDir> <extractDir> <outDir> [lastSession]`: fő eseményvizsgálat, minden zónaérintés
+  szimulált fordulós kereskedésként (limit a zóna szélén négy stop-pufferrel, illetve megerősítő záróárra belépés),
+  1R/2R/3R célokkal, nettó R-ben, a véletlenszerűen eltolt zónákkal összevetve.
+  `analyze_events.py <events.csv.gz> <summary.md>`: összefoglaló táblázatok.
