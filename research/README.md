@@ -31,3 +31,5 @@ HVN min asymmetry 0.8, max overshoot 0.25, forgalommal súlyozva, a besorolás a
 - `holdout.py export|evaluate <holdoutDir>`: a rögzített szabály (2026-10-07, a küszöbök számként befagyasztva) egyszeri
   próbája a 2026-os időszakon. Előtte `event_study.py <resultsDir> <extractDir> <holdoutDir> 2026-12-31`, az `export`
   után a DatabentoExtract `book` a 2026-os fájlokon a `book_events_2026.csv`-vel, a kimenet `<holdoutDir>/book`.
+- `position_study.py <resultsDir>`: a rögzített szabály egyszerre egy pozícióval (seanszonként a belépés
+  sorrendjében, nyitott pozíció alatt a jel kimarad), 2024-2026, valódi és eltolt zónák külön számlán.
