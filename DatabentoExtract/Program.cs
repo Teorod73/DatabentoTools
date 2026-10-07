@@ -9,6 +9,9 @@ const string Usage = """
           One file with diagnostics: record types, trade/fill comparison per price, the extract of the file.
       DatabentoExtract extract <inputDir|file> <outDir> [options]
           Every *.dbn and *.dbn.zst file of the directory, already extracted files are skipped.
+      DatabentoExtract book <inputDir|file> <events.csv> <outDir> [--parallel n] [--force]
+          Order book and trade flow features around the zone touches of the events file
+          (research/export_book_events.py), written to book/<name>.csv per input file.
 
     Options:
       --source trades|fills   volume per price from the trades (default) or from the fills
@@ -22,7 +25,7 @@ const string Usage = """
       instruments/<name>.csv     every instrument of the file with its symbol and record statistics
     """;
 
-if (args.Length < 3 || args[0] is not ("diag" or "extract"))
+if (args.Length < 3 || args[0] is not ("diag" or "extract" or "book") || (args[0] == "book" && args.Length < 4))
 {
     Console.WriteLine(Usage);
     return 1;
@@ -30,14 +33,15 @@ if (args.Length < 3 || args[0] is not ("diag" or "extract"))
 
 var mode = args[0];
 var input = args[1];
-var outDirectory = args[2];
+var eventsPath = mode == "book" ? args[2] : "";
+var outDirectory = mode == "book" ? args[3] : args[2];
 
 var source = VolumeSource.Trades;
 var minShare = 0.01;
 var parallel = 2;
 var force = false;
 
-for (var i = 3; i < args.Length; i++)
+for (var i = mode == "book" ? 4 : 3; i < args.Length; i++)
 {
     switch (args[i])
     {
@@ -82,7 +86,10 @@ var files = Directory.Exists(input)
         .ToList()
     : [input];
 
-Console.WriteLine($"{files.Count} files, source: {source}, parallel: {parallel}");
+var events = mode == "book" ? BookFeatureCollector.ReadEvents(eventsPath) : [];
+Console.WriteLine(mode == "book"
+    ? $"{files.Count} files, {events.Count} events, parallel: {parallel}"
+    : $"{files.Count} files, source: {source}, parallel: {parallel}");
 
 var stopwatch = Stopwatch.StartNew();
 var failed = 0;
@@ -91,7 +98,10 @@ Parallel.ForEach(files, new ParallelOptions { MaxDegreeOfParallelism = parallel 
 {
     try
     {
-        FileProcessor.Process(file, outDirectory, options, force, consoleSync);
+        if (mode == "book")
+            BookProcessor.Process(file, outDirectory, events, force, consoleSync);
+        else
+            FileProcessor.Process(file, outDirectory, options, force, consoleSync);
     }
     catch (Exception e)
     {
