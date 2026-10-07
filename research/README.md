@@ -21,3 +21,6 @@ HVN min asymmetry 0.8, max overshoot 0.25, forgalommal súlyozva, a besorolás a
   szimulált fordulós kereskedésként (limit a zóna szélén négy stop-pufferrel, illetve megerősítő záróárra belépés),
   1R/2R/3R célokkal, nettó R-ben, a véletlenszerűen eltolt zónákkal összevetve.
   `analyze_events.py <events.csv.gz> <summary.md>`: összefoglaló táblázatok.
+- `export_book_events.py <resultsDir> <events.csv.gz> <book_events.csv>`: az érintések listája a DatabentoExtract
+  `book` futtatásához. `book_analysis.py <resultsDir> <outDir>`: a könyv- és orderflow-jellemzők összevetése a
+  megerősítéses belépés eredményével, 2024 / 2025 bontásban, a jelölt kizáró szabállyal.
