@@ -20,7 +20,9 @@ before T0, so the first value at T0 is complete). The seconds with a crossed boo
     def_eff        the same for the defenders (mid move against the attack over the last N defender contracts)
     att_large      large attacker series (60 RTH / 20 night) / attacker aggressor volume                    0..1
     def_large      the same for the defenders                                                                0..1
-    balance        (defending resting - attacking resting) / (sum) inside the band                          -1..1
+    balance        resting size per price level inside the band, (defending - attacking) / (sum)           -1..1
+                   (defending levels: from its best price to the band edge, the same for the attacking side;
+                   the plain sizes would follow the price position in the fixed band, not the order flow)
     volume         aggressor volume of 30 s / its median in the part of day                                 0..
 
 Normalized time: T0 = -1, the swing second Tx = 0, Tend = +1, linear in between on both sides. Each window is
@@ -57,14 +59,18 @@ TITLES = {
     "def_eff": "Védő hatékonyság (ATR1 / N kontraktus)",
     "att_large": "Nagy támadók aránya",
     "def_large": "Nagy védők aránya",
-    "balance": "Könyv balansz (védő - támadó) / összes",
+    "balance": "Könyv balansz szintenként (védő - támadó) / összes",
     "volume": "Agresszív volumen / szokásos",
 }
 
 
-def load(pivots: str, flow: str, year: int) -> tuple[pd.DataFrame, pd.DataFrame]:
+TICK = 0.25
+
+
+def load(pivots: str, flow: str, years) -> tuple[pd.DataFrame, pd.DataFrame]:
+    years = [years] if isinstance(years, int) else list(years)
     windows = pd.read_csv(os.path.join(pivots, "windows.csv"))
-    windows = windows[windows.valid & (pd.to_datetime(windows.session).dt.year == year)].set_index("window_id")
+    windows = windows[windows.valid & pd.to_datetime(windows.session).dt.year.isin(years)].set_index("window_id")
     rows = []
     for path in sorted(glob.glob(os.path.join(flow, "*.csv.gz"))):
         df = pd.read_csv(path)
@@ -92,6 +98,12 @@ def mirrored(df: pd.DataFrame, windows: pd.DataFrame) -> pd.DataFrame:
     bid = pd.to_numeric(df.bid, errors="coerce").to_numpy(float)
     ask = pd.to_numeric(df.ask, errors="coerce").to_numpy(float)
     mid = np.where(df.crossed.to_numpy() == 1, np.nan, (bid + ask) / 2)
+    low = df.window_id.map(windows.band_low).to_numpy(float)
+    top = df.window_id.map(windows.band_high).to_numpy(float)
+    ask_levels = np.where(ask <= top, (top - ask) / TICK + 1, np.nan)
+    bid_levels = np.where(bid >= low, (bid - low) / TICK + 1, np.nan)
+    out["def_levels"] = np.where(high, ask_levels, bid_levels)
+    out["att_levels"] = np.where(high, bid_levels, ask_levels)
     out["mid_att"] = np.where(high, mid, -mid)          # rises when the attack succeeds
     out["crossed"] = df.crossed.to_numpy()
     return out
@@ -108,7 +120,9 @@ def efficiency(mid: np.ndarray, volume: np.ndarray, n: float) -> np.ndarray:
     return out
 
 
-def curves(m: pd.DataFrame, windows: pd.DataFrame) -> pd.DataFrame:
+def curves(m: pd.DataFrame, windows: pd.DataFrame, base: np.ndarray | None = None) -> pd.DataFrame:
+    """base: the rows whose medians normalize the volume and give N of the efficiency (default all rows); with more
+    years only the search year should be the base."""
     m = m.sort_values(["window_id", "second"]).reset_index(drop=True)
     g = m.groupby("window_id", sort=False)
     roll = lambda c: g[c].transform(lambda x: x.rolling(ROLL, min_periods=ROLL).sum())
@@ -130,14 +144,15 @@ def curves(m: pd.DataFrame, windows: pd.DataFrame) -> pd.DataFrame:
     large_def = np.where(w == "rth", roll("def_large_60"), roll("def_large_20"))
     out["att_large"] = ratio(pd.Series(large_att), att)
     out["def_large"] = ratio(pd.Series(large_def), dfn)
-    rest_d, rest_a = m.def_rest, m.att_rest
+    rest_d, rest_a = m.def_rest / m.def_levels, m.att_rest / m.att_levels
     out["balance"] = ratio(rest_d - rest_a, rest_d + rest_a)
+    base = np.ones(len(m), bool) if base is None else base
     vol = att + dfn
-    typical = vol.groupby(w).transform("median")
+    typical = w.map(vol[base].groupby(w[base]).median())
     out["volume"] = vol / typical
 
     # efficiency over a fixed number of contracts (the median 30 s attacker volume of the part of day)
-    n_att = att.groupby(w).median()
+    n_att = att[base].groupby(w[base]).median()
     atr = m.window_id.map(windows.atr1)
     out["att_eff"] = np.nan
     out["def_eff"] = np.nan

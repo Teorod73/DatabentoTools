@@ -136,6 +136,14 @@ sorrend, és hogy minden esemény az ablakon belül történjen.
   felfut, a védő refill a csúcsig csökken), a fordulás jelei a csúcs után jönnek. A sávok szélesek. Mechanikus
   (az ár mozgásából következő) görbék: delta, hatékonyság, és a fix sávú **balansz** (V alakú, mert a csúcson a
   sáv teteje közel van: a sáv geometriája, nem orderflow; ár-szintenkénti sűrűséggel kell újradefiniálni).
+- Balansz átírva szintenkénti sűrűségre (nyugvó méret / árszintek száma a legjobb ártól a sáv széléig): éjszaka
+  lapos, RTH-ban a csúcs felé nő; részben még mindig geometria lehet (a mélység a legjobb ár közelében sűrűbb).
+- 4. lépés (`research/pivot_sequences.py`, ResearchData `results/pivots/sequences/`): 64 eseménytípus. Az első,
+  laza definícióval (q20/q80, 5 s) szinte minden esemény az ablakok 90-100%-ában és rögtön T0 után történt, ezért
+  szigorítva: q95/q5, 15 s, CUSUM H = 10 (csak az esemény-gyakoriságok alapján, eredményre nem hangolva). Medián 37
+  esemény ablakonként, 19 esemény mindkét évben ≥ 90%. **Gond:** 2025-ben sok arány-esemény ritkább (pl. delta_hi éjszaka
+  33% → 17%, def_refill_hi 39% → 14%), mert 2025-ben több a kötés (éjszaka +25%, RTH +29% / s), és a 30 s-os
+  arányok kevésbé szélsőségesek. Javaslat: az arány-görbék gördülő ablaka fix idő helyett fix kontraktusszám legyen.
 
 ## Nyitott kérdések, következő lépések
 
