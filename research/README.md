@@ -58,3 +58,10 @@ HVN min asymmetry 0.8, max overshoot 0.25, forgalommal súlyozva, a besorolás a
   1000 keverés; döntő az „időzítés” keverés (minden esemény megtartja a saját időzítését és gyakoriságát, csak az
   ablakok keverednek), a sima és a szigorú keverés csak tájékoztató (őket a tipikus időzítés becsapja). Kimarad: a
   mindkét évben ≥ 90%-os esemény és az azonos görbéből vett két esemény. Kimenet: `patterns.csv.gz`, `patterns.md`.
+- `candidate_windows.py <resultsDir> <outDir> [sample] [lastSession]`: a gazdasági próba jelöltjei, ahogy élőben
+  látszanak: minden gyertya, amelyet alacsonyabb High-ú követ (Low tükrözve), és a belépő gyertya óta a legmagasabb;
+  ablak és sáv mint a fordulóknál, a vége az első szint alatti gyertya vagy az első magasabb gyertya (ott
+  érvénytelenül). `pivot` = ugyanazon a gyertyán ZigZag-forduló. A C# adathoz 10%-os véletlen minta
+  (`candidate_events.csv`). Kimenet: `candidates.csv`, `candidate_events.csv`, `summary.md`. A próbába kerülő minták
+  (`selected_patterns.csv`): ülésszakonként, hosszonként (3, 4) és családonként (minden / csak könyv-orderflow) a
+  2024-ben átment 10 leggyakoribb, csak a 2024-es adatból választva.

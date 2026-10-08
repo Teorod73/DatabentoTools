@@ -176,6 +176,13 @@ sorrend, és hogy minden esemény az ablakon belül történjen.
   cancel nő → nagy védők csökkennek, a csúcs körül (u ≈ 0,05). Nincs minta, amely a fordulók nagy részét lefedné.
   Fontos korlát: az átmenés csak azt mutatja, hogy a fordulókon az események együtt járnak; azt nem, hogy nem
   fordulón ritkábbak. Ehhez a gazdasági próbához nem forduló jelölt-csúcsokon is kell C# adat.
+- 6. lépés előkészítve (gazdasági próba, `research/candidate_windows.py`, ResearchData `results/candidates/`):
+  jelölt = gyertya, amelyet alacsonyabb High-ú követ és a belépő óta a legmagasabb (Low tükrözve), ablak a
+  fordulókéval azonos, vége az első szint alatti vagy az első magasabb gyertya. 2024-2025: 84 923 érvényes jelölt
+  (éjszaka 58 030, ebből 5,5% forduló; RTH 26 893, 6,6%); a fordulóablakok 4623 / 4667-e jelöltként is megvan,
+  azonos ablakkal. C# adat a 10%-os mintára (8438 jelölt, 6,9 M másodperc). Kiválasztott minták
+  (`selected_patterns.csv`, csak 2024-ből): 70. A felhasználónak le kell futtatnia a `pivots`-ot a
+  `candidate_events.csv`-re.
 
 ## Nyitott kérdések, következő lépések
 
