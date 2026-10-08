@@ -120,11 +120,12 @@ sorrend, és hogy minden esemény az ablakon belül történjen.
 - 2. lépés: `DatabentoExtract pivots` (C#, `PivotFlow.cs`, teszt `tests/make_pivot_test.py`) a
   `results/pivots/pivot_events.csv`-ből másodpercenkénti nyers számlálókat ír (`pivots/<name>.csv.gz`, oszlopok a
   README-ben). A felhasználónak kell lefuttatnia a nyers fájlokon és feltöltenie.
-- Refill kettébontva (2026-10-08): `*_hidden` = a látható méret fölötti kötött volumen (natív iceberg + implied, az
-  MBO-ból nem választható szét), `*_refill_visible` = refill a rejtett rész nélkül (szintetikus újratöltés). Előtte
-  egy napon `DatabentoExtract diag` → `<name>_diag_hidden.txt`: hogyan jelenik meg a natív iceberg a Databento
-  MBO-ban (látható méretnél nagyobb fill, méretnövelő M vagy új A). Ennek eredményétől függ, hogy a betett méret
-  (`*_add`) tartalmazza-e az iceberg-újratöltést. A `pivots` futtatás ez után.
+- Refill kettébontva (2026-10-08): `*_hidden` = a látható méret fölötti kötött volumen, `*_refill_visible` = refill a
+  rejtett rész nélkül (szintetikus újratöltés). Diagnosztika (`diag` → `<name>_diag_hidden.txt`, 2025-03-05): a
+  rejtett volumen az agresszív volumen 1,04%-a, szinte csak **natív iceberg** (implied gyakorlatilag nincs). A natív
+  iceberg: F a látható méretnél nagyobb, utána M ugyanazon a rendelésen visszaállítja a látható részt (új A nincs).
+- Ezért a `pivots` könyvkezelése (2026-10-08 javítás): a C/M-nél az összes függő fill teljesült, csak a fill után
+  megmaradónál kisebb méret cancel, a nagyobb `*_reload` (nem add). A `pivots` futtatás most jöhet.
 
 ## Nyitott kérdések, következő lépések
 
@@ -132,5 +133,9 @@ sorrend, és hogy minden esemény az ablakon belül történjen.
 - Gond: a NinjaTrader Level 2 csak ~10 árszintet ad, a sáv 21–45 tick is lehet, a C# viszont teljes MBO könyvből
   számolt. Dönteni kell: mélyebb adatforrás, vagy a jellemzők átdefiniálása a látható szintekre (ez új szabály,
   2024–2025-ön újra kell ellenőrizni).
+- A régi `book` mód (a rögzített szabály `added_vs_filled_1`, `defense_kept_1` jellemzői) a natív icebergeket
+  hibásan könyveli: a függő fill csak a csökkenés erejéig fill, az iceberg-újratöltés betett méretnek számít. A
+  szabály és a holdout ezzel a definícióval készült, utólag nem változtatható; az élő NinjaTrader-változatnak ugyanezt
+  kell követnie, vagy új szabályként 2024–2025-ön újra kell ellenőrizni.
 - Érzékenységvizsgálat az ATR-szorzókra 2024–2025-ön.
 - NQ még nem volt vizsgálva.

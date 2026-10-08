@@ -5,8 +5,8 @@ C# PivotFlowCollector.
 
 Life cycle as on GLBX.MDP3 (see make_book_test.py), events of several records share a timestamp and the last record
 of an event has the last flag. Trade bursts of one side within a few ms make the large aggressor series, some trades
-have no side, some trades are larger than the visible resting size (native iceberg or implied volume: the extra has
-no fill record). Each window is replayed separately with a plain book (best price by min / max of the levels).
+have no side, some trades are larger than the visible resting size: implied volume (the extra has no fill record) and
+native icebergs (a fill above the visible size, then an M on the same order sets the visible size again). Each window is replayed separately with a plain book (best price by min / max of the levels).
 """
 import datetime
 import decimal
@@ -43,6 +43,7 @@ meta = d.Metadata(dataset="GLBX.MDP3", start=start, stype_in=d.SType.PARENT, sty
 
 events = []           # list of (ts, instrument, [records]); record = (action, side, price, size, order_id, flags)
 orders = {1001: {}, 1002: {}}
+icebergs = {}         # order id -> [visible size, hidden reserve] of a native iceberg
 next_id = [1]
 ACTION = {"A": d.Action.ADD, "C": d.Action.CANCEL, "M": d.Action.MODIFY, "R": d.Action.CLEAR,
           "T": d.Action.TRADE, "F": d.Action.FILL}
@@ -81,7 +82,7 @@ def trade(iid, aggressor, want, recs):
         for oid in [oid for oid, o in book.items() if o[0] == resting and o[1] == level]:
             if want <= 0:
                 break
-            q = min(want, book[oid][2])
+            q = min(want, book[oid][2] + (icebergs[oid][1] if oid in icebergs else 0))
             taken.append((oid, q))
             want -= q
         if not taken:
@@ -92,9 +93,17 @@ def trade(iid, aggressor, want, recs):
             recs.append(("F", resting, level, q, oid, 0))
         for oid, q in taken:
             left = book[oid][2] - q
+            if oid in icebergs and left < book[oid][2]:
+                # native iceberg: the reserve refills the visible size with an M on the same order
+                visible, reserve = icebergs[oid]
+                total = book[oid][2] + reserve - q
+                if total > 0:
+                    left = min(visible, total)
+                    icebergs[oid][1] = total - left
             if left <= 0:
                 recs.append(("C", resting, level, book[oid][2], oid, 0))
                 del book[oid]
+                icebergs.pop(oid, None)
             else:
                 book[oid][2] = left
                 recs.append(("M", resting, level, left, oid, 0))
@@ -120,6 +129,9 @@ for step in range(40000):
                 continue
             oid = new_id()
             size = random.randint(1, 30)
+            if random.random() < 0.1:
+                size = random.randint(1, 4)
+                icebergs[oid] = [size, random.randint(5, 80)]
             book[oid] = [side, price, size]
             recs.append(("A", side, price, size, oid, 0))
     elif r < 0.62:
@@ -241,7 +253,7 @@ def replay(w):
         acc.update(buy=0, sell=0, trades=0, last=None, high=None, low=None,
                    large_buy=[0, 0], large_sell=[0, 0])
         for s in "AB":
-            acc[s] = dict(add=0, add1=0.0, addl=0.0, cancel=0, cancel1=0.0, cancell=0.0, fill=0, up=0, down=0, hidden=0)
+            acc[s] = dict(add=0, add1=0.0, addl=0.0, cancel=0, cancel1=0.0, cancell=0.0, fill=0, reload=0, up=0, down=0, hidden=0)
 
     def active():
         return started and cur < w["end"]
@@ -292,7 +304,7 @@ def replay(w):
             x = acc[side]
             rest = sum(sz for p, sz in levels[side].items() if lo_band - 1e-9 <= p <= hi_band + 1e-9)
             row += [x["add"], number(x["add1"]), number(x["addl"]), x["cancel"], number(x["cancel1"]),
-                    number(x["cancell"]), x["fill"], rest]
+                    number(x["cancell"]), x["fill"], x["reload"], rest]
         ta, tb = total("A"), total("B")
         row += [ta - written["A"], acc["A"]["up"], acc["A"]["down"], tb - written["B"], acc["B"]["up"], acc["B"]["down"]]
         va, vb = visible_total("A"), visible_total("B")
@@ -316,8 +328,8 @@ def replay(w):
                 if vol >= limit:
                     acc["large_buy" if side == "B" else "large_sell"][k] += vol
 
-    def resting_change(side, price, change, filled):
-        if not active() or (change == 0 and filled == 0):
+    def resting_change(side, price, change, filled, reload=0):
+        if not active() or (change == 0 and filled == 0 and reload == 0):
             return
         if not (lo_band - 1e-9 <= price <= hi_band + 1e-9):
             return
@@ -335,6 +347,7 @@ def replay(w):
             x["cancel1"] += -change * w1
             x["cancell"] += -change * wl
         x["fill"] += filled
+        x["reload"] += reload
 
     def lv_change(side, price, delta):
         lv = levels[side]
@@ -399,12 +412,13 @@ def replay(w):
         elif action == "A":
             add(side, price, size, oid)
         elif action == "C":
+            # every pending fill is fill, only the rest of the reduction is cancel
             if oid in book:
                 s_, p_, z_ = book[oid]
                 red = min(z_, size)
-                fill = min(pending_fill[oid], red)
-                pending_fill[oid] -= fill
-                resting_change(s_, p_, -(red - fill), fill)
+                fill = pending_fill[oid]
+                pending_fill[oid] = 0
+                resting_change(s_, p_, -max(0, red - fill), fill)
                 book[oid][2] -= red
                 lv_change(s_, p_, -red)
                 if book[oid][2] <= 0:
@@ -414,23 +428,23 @@ def replay(w):
                 add(side, price, size, oid)
             else:
                 s_, p_, z_ = book[oid]
+                fill = pending_fill[oid]
+                left = max(0, z_ - fill)
+                pending_fill[oid] = 0
                 if p_ == price and s_ == side:
-                    delta = size - z_
-                    if delta < 0:
-                        fill = min(pending_fill[oid], -delta)
-                        pending_fill[oid] -= fill
-                        resting_change(s_, p_, delta + fill, fill)
-                    elif delta > 0:
-                        resting_change(s_, p_, delta, 0)
+                    if fill > 0:
+                        # a size above what is left after the fills is an iceberg reload
+                        resting_change(s_, p_, -max(0, left - size), fill, max(0, size - left))
+                    elif size != z_:
+                        resting_change(s_, p_, size - z_, 0)
+                    lv_change(s_, p_, size - z_)
                     book[oid][2] = size
-                    lv_change(s_, p_, delta)
                     if size <= 0:
                         del book[oid]
                 else:
-                    resting_change(s_, p_, -z_, 0)
+                    resting_change(s_, p_, -left, fill)
                     lv_change(s_, p_, -z_)
                     book[oid] = [side, price, size]
-                    pending_fill[oid] = 0
                     resting_change(side, price, size, 0)
                     lv_change(side, price, size)
         elif action == "R":
@@ -451,7 +465,7 @@ def replay(w):
 
 header = ["window_id", "second", "buy", "sell", "trades", "last", "high", "low", "bid", "ask"]
 for side in ("ask", "bid"):
-    header += [f"{side}_{c}" for c in ("add", "add_w1", "add_wl", "cancel", "cancel_w1", "cancel_wl", "fill", "rest")]
+    header += [f"{side}_{c}" for c in ("add", "add_w1", "add_wl", "cancel", "cancel_w1", "cancel_wl", "fill", "reload", "rest")]
 header += ["ask_refill", "ask_ep_up", "ask_ep_down", "bid_refill", "bid_ep_up", "bid_ep_down",
            "ask_hidden", "ask_refill_visible", "bid_hidden", "bid_refill_visible"]
 for limit in LIMITS:

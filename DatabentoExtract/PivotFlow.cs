@@ -16,9 +16,10 @@ public sealed class PivotWindow
 /// <summary>
 /// Order flow of the pivot windows per second, replaying the MBO records of one file.
 ///
-/// Book as in BookFeatureCollector: A adds, C reduces, M sets price and size (an unknown order is added), R clears
-/// the instrument; T and F do not change the book, the filled size of an order is remembered so the following C or M
-/// reduction is counted as fill and not as cancel. The best bid and ask are evaluated at the end of an event (record
+/// Book: A adds, C reduces, M sets price and size (an unknown order is added), R clears the instrument; T and F do
+/// not change the book. The filled size of an order is remembered: at its next C or M all of it is fill, a smaller
+/// size than what is left after the fills is a cancel, a larger one is a reload (a native iceberg sets its visible
+/// size again with an M after a fill above the visible size; BookFeatureCollector counts these differently). The best bid and ask are evaluated at the end of an event (record
 /// with the last flag, or the first record of a later timestamp), not after every record of the event.
 ///
 /// Per second and window (every flow column is the change in that second):
@@ -27,6 +28,7 @@ public sealed class PivotWindow
 ///   {ask,bid}_add / _cancel / _fill   resting size added, cancelled (not filled) and filled on that side inside the
 ///                            band; _w1 weighted by 1 / (1 + d), _wl by max(0, 1 - d / H), d = ticks from the best
 ///                            price of that side before the change, H = half band in ticks
+///   {ask,bid}_reload         iceberg reload inside the band: the size an M sets above what was left after the fills
 ///   {ask,bid}_rest           resting size of that side inside the band at the end of the second
 ///   {ask,bid}_refill         refill on the best price: an episode lasts while the best price of the side stays,
 ///                            Q0 = its resting size at the start, A = aggressor volume against it at that price,
@@ -140,7 +142,7 @@ public sealed class PivotFlowCollector
     // flow of one side in the current second
     private sealed class SideFlow
     {
-        public long Add, Cancel, Fill, EpisodesUp, EpisodesDown, Hidden;
+        public long Add, Cancel, Fill, Reload, EpisodesUp, EpisodesDown, Hidden;
         public double AddW1, AddWl, CancelW1, CancelWl;
     }
 
@@ -399,19 +401,22 @@ public sealed class PivotFlowCollector
     {
         if (mbo.Side is not ('A' or 'B') || mbo.Price == MboRecord.UndefinedPrice)
             return;
-        OnRestingChange(book, mbo.InstrumentId, mbo.Side, mbo.Price, mbo.OrderSize, 0);
+        OnRestingChange(book, mbo.InstrumentId, mbo.Side, mbo.Price, mbo.OrderSize, 0, 0);
         book.Orders[mbo.OrderId] = new Order { Side = mbo.Side, Price = mbo.Price, Size = mbo.OrderSize };
         book.Change(mbo.Side, mbo.Price, mbo.OrderSize);
     }
 
+    // The fills of an order (F) come before its C or M. A native iceberg is filled above its visible size and the
+    // following M sets the visible size again: every pending fill is fill, a size above what is left after the
+    // fills is a reload, only a size below it is a cancel.
     private void Reduce(Book book, MboRecord mbo)
     {
         if (!book.Orders.TryGetValue(mbo.OrderId, out var order))
             return;
         var reduce = Math.Min(order.Size, mbo.OrderSize);
-        var fill = Math.Min(order.PendingFill, reduce);
-        order.PendingFill -= fill;
-        OnRestingChange(book, mbo.InstrumentId, order.Side, order.Price, -(reduce - fill), fill);
+        var fill = order.PendingFill;
+        order.PendingFill = 0;
+        OnRestingChange(book, mbo.InstrumentId, order.Side, order.Price, -Math.Max(0, reduce - fill), fill, 0);
         order.Size -= reduce;
         book.Change(order.Side, order.Price, -reduce);
         if (order.Size <= 0)
@@ -425,26 +430,26 @@ public sealed class PivotFlowCollector
             Add(book, mbo);
             return;
         }
+        var fill = order.PendingFill;
+        var left = Math.Max(0, order.Size - fill);
+        order.PendingFill = 0;
         if (order.Price == mbo.Price && order.Side == mbo.Side)
         {
-            var delta = (long)mbo.OrderSize - order.Size;
-            if (delta < 0)
-            {
-                var fill = Math.Min(order.PendingFill, -delta);
-                order.PendingFill -= fill;
-                OnRestingChange(book, mbo.InstrumentId, order.Side, order.Price, delta + fill, fill);
-            }
-            else if (delta > 0)
-                OnRestingChange(book, mbo.InstrumentId, order.Side, order.Price, delta, 0);
-            order.Size = mbo.OrderSize;
-            book.Change(order.Side, order.Price, delta);
+            var size = (long)mbo.OrderSize;
+            if (fill > 0)
+                OnRestingChange(book, mbo.InstrumentId, order.Side, order.Price, -Math.Max(0, left - size), fill,
+                    Math.Max(0, size - left));
+            else if (size != order.Size)
+                OnRestingChange(book, mbo.InstrumentId, order.Side, order.Price, size - order.Size, 0, 0);
+            book.Change(order.Side, order.Price, size - order.Size);
+            order.Size = size;
             if (order.Size <= 0)
                 book.Orders.Remove(mbo.OrderId);
             return;
         }
 
-        // price (or side) change: cancelled at the old price, added at the new one
-        OnRestingChange(book, mbo.InstrumentId, order.Side, order.Price, -order.Size, 0);
+        // price (or side) change: filled and cancelled at the old price, added at the new one
+        OnRestingChange(book, mbo.InstrumentId, order.Side, order.Price, -left, fill, 0);
         book.Change(order.Side, order.Price, -order.Size);
         if (mbo.Side is not ('A' or 'B') || mbo.Price == MboRecord.UndefinedPrice)
         {
@@ -454,16 +459,15 @@ public sealed class PivotFlowCollector
         order.Side = mbo.Side;
         order.Price = mbo.Price;
         order.Size = mbo.OrderSize;
-        order.PendingFill = 0;
-        OnRestingChange(book, mbo.InstrumentId, order.Side, order.Price, order.Size, 0);
+        OnRestingChange(book, mbo.InstrumentId, order.Side, order.Price, order.Size, 0, 0);
         book.Change(order.Side, order.Price, order.Size);
     }
 
-    // resting size change inside the band of the windows: added (> 0) or cancelled (< 0), filled separately.
-    // Called before the book changes, so the distance is measured from the best price before the change.
-    private void OnRestingChange(Book book, uint instrumentId, char side, long price, long change, long filled)
+    // resting size change inside the band of the windows: added (> 0) or cancelled (< 0), filled and reloaded
+    // (iceberg) separately. Called before the book changes, so the distance is measured from the best price before.
+    private void OnRestingChange(Book book, uint instrumentId, char side, long price, long change, long filled, long reload)
     {
-        if (active.Count == 0 || (change == 0 && filled == 0))
+        if (active.Count == 0 || (change == 0 && filled == 0 && reload == 0))
             return;
         var best = side == 'B' ? book.BestBid : book.BestAsk;
         var distance = best == MboRecord.UndefinedPrice ? 0 : Math.Max(0, side == 'B' ? (best - price) / tick : (price - best) / tick);
@@ -490,6 +494,7 @@ public sealed class PivotFlowCollector
                 flow.CancelWl += -change * wl;
             }
             flow.Fill += filled;
+            flow.Reload += reload;
         }
     }
 
@@ -517,7 +522,7 @@ public sealed class PivotFlowCollector
             values.AddRange(new[]
             {
                 f.Add.ToString(), Number(f.AddW1), Number(f.AddWl),
-                f.Cancel.ToString(), Number(f.CancelW1), Number(f.CancelWl), f.Fill.ToString(),
+                f.Cancel.ToString(), Number(f.CancelW1), Number(f.CancelWl), f.Fill.ToString(), f.Reload.ToString(),
                 book.SizeBetween(side, w.BandLow, w.BandHigh, tick).ToString(),
             });
         }
@@ -544,7 +549,7 @@ public sealed class PivotFlowCollector
         s.Low = long.MaxValue;
         foreach (var f in new[] { s.Ask, s.Bid })
         {
-            f.Add = f.Cancel = f.Fill = f.EpisodesUp = f.EpisodesDown = f.Hidden = 0;
+            f.Add = f.Cancel = f.Fill = f.Reload = f.EpisodesUp = f.EpisodesDown = f.Hidden = 0;
             f.AddW1 = f.AddWl = f.CancelW1 = f.CancelWl = 0;
         }
         Array.Clear(s.LargeBuy);
@@ -560,7 +565,7 @@ public sealed class PivotFlowCollector
     {
         var columns = new List<string> { "window_id", "second", "buy", "sell", "trades", "last", "high", "low", "bid", "ask" };
         foreach (var side in new[] { "ask", "bid" })
-            columns.AddRange(new[] { "add", "add_w1", "add_wl", "cancel", "cancel_w1", "cancel_wl", "fill", "rest" }
+            columns.AddRange(new[] { "add", "add_w1", "add_wl", "cancel", "cancel_w1", "cancel_wl", "fill", "reload", "rest" }
                 .Select(c => $"{side}_{c}"));
         columns.AddRange(new[] { "ask_refill", "ask_ep_up", "ask_ep_down", "bid_refill", "bid_ep_up", "bid_ep_down",
             "ask_hidden", "ask_refill_visible", "bid_hidden", "bid_refill_visible" });

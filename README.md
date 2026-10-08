@@ -45,14 +45,19 @@ ablak egy másodperce (UTC), minden forgalmi oszlop az abban a másodpercben tö
   `bid`, `ask`: a legjobb árak a másodperc végén.
 - `ask_*`, `bid_*`: az adott oldal betett (`add`), teljesülés nélkül kivett (`cancel`) és teljesült (`fill`) mérete
   a sávban; `_w1` súlya 1/(1+d), `_wl` súlya max(0, 1 - d/H), ahol d a változás előtti legjobb ártól mért tick, H a
-  sáv fele tickben. `rest`: nyugvó méret a sávban a másodperc végén.
+  sáv fele tickben. `reload`: natív iceberg újratöltése a sávban. `rest`: nyugvó méret a sávban a másodperc végén.
+  A rendelés fill-jei (F) a C vagy M előtt jönnek: a következő C vagy M-nél az összes függő fill teljesült méret,
+  a fill után megmaradónál kisebb méret visszavonás, a nagyobb újratöltés (a natív iceberg a látható méretnél nagyobb
+  fill után egy M-mel ugyanazon a rendelésen állítja vissza a látható részt, a 2025-03-05-ös diagnosztika szerint).
+  A régi `book` mód ezt másképp számolja (ott a függő fill csak a csökkenés erejéig fill, az újratöltés betett méret).
 - `ask_refill`, `bid_refill`: újratöltés a legjobb áron. Egy epizód addig tart, amíg az oldal legjobb ára nem
   változik; Q0 = a kezdő nyugvó méret, A = az ott teljesült agresszív volumen, a számláló a lezárt epizódok
   max(0, A - Q0) összege plusz a nyitotté (a másodpercben a növekmény). `_ep_up` / `_ep_down`: lezárt epizódok,
   amelyeknél az ár felfelé / lefelé lépett.
 - `ask_hidden`, `bid_hidden`: a látható méret fölötti agresszív volumen eseményenként és áranként, max(0, kötött
   volumen - az oldal nyugvó mérete az áron az esemény első ottani kötése előtt). Natív iceberg és implied likviditás
-  (ez utóbbi nincs az MBO könyvben), a kettő nem választható szét. `ask_refill_visible`, `bid_refill_visible`: a
+  (ez utóbbi nincs az MBO könyvben); a 2025-03-05-ös napon szinte csak natív iceberg (a fill a rejtett esetek 4193 /
+  4194-ében fedi a kötést), az agresszív volumen 1,04%-a. `ask_refill_visible`, `bid_refill_visible`: a
   refill a rejtett volumen nélkül, epizódonként max(0, A - H - Q0), H = az epizód árán mért rejtett volumen.
 - `large_buy_20`, `large_sell_20`, `large_buy_60`, `large_sell_60`: legalább 20 / 60 kontraktusos agresszív sorozatok
   volumene az AgressiveDetector logikájával (azonos oldali kötések az első kötéstől 10 ms-on belül), abban a
