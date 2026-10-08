@@ -3,7 +3,9 @@
     python pivot_sequences.py <pivotsDir> <flowDir> <outDir>
 
 Curves of pivot_curves.py (mirrored to the swing side, the high and the low together), per part of day. The
-thresholds come from the 2024 windows only (the search year); the events of 2025 use the same thresholds.
+thresholds of a window come from the windows of the previous 60 calendar days of the same part of day (rolling, so a
+threshold means "more extreme than lately": the trade size and the curve extremes drift through 2024 and 2025, a fixed
+threshold would change its meaning). A window with fewer than 20 earlier sessions has no events (early 2024).
 
 Events, scanned from T0 to the end of the window, each with its first second only:
     <curve>_hi / _lo     the curve is at least its q95 / at most its q5 for 15 seconds (the columns are called q80 /
@@ -48,6 +50,9 @@ CROSSES = {"cross_eff": ("def_eff", "att_eff"), "cross_large": ("def_large", "at
            "cross_refill": ("def_refill", "att_refill"), "cross_cancel": ("att_cancel", "def_cancel")}
 DIVERGENCES = ["delta", "att_eff", "att_large", "volume"]
 SEARCH_YEAR = 2024
+TRAILING_DAYS = 60
+MIN_SESSIONS = 20
+BINS = 2000
 
 
 def first_hold(cond: np.ndarray) -> int:
@@ -115,18 +120,54 @@ def first_divergence(mid: np.ndarray, c: np.ndarray, tolerance: float) -> int:
     return -1
 
 
-def thresholds(cur: pd.DataFrame, part: pd.Series, year: pd.Series) -> pd.DataFrame:
-    base = cur[year == SEARCH_YEAR]
-    rows = []
-    for p, g in base.groupby(part[year == SEARCH_YEAR]):
+def rolling_thresholds(cur: pd.DataFrame, windows: pd.DataFrame) -> pd.DataFrame:
+    """Thresholds of every window from the windows of the previous TRAILING_DAYS calendar days of the same part of
+    day (not the window's own session): the q_low / q_high of each curve over all their seconds and the sd of the
+    5 s slope. Fewer than MIN_SESSIONS earlier sessions: no thresholds (the window has no events).
+    The quantiles come from fixed fine bins per curve (the bin edges only set the resolution)."""
+    session = pd.to_datetime(cur.window_id.map(windows.session))
+    part = cur.window_id.map(windows.part)
+    slopes = {c: cur.groupby("window_id")[c].diff(SLOPE) for c in pc.CURVES}
+    edges = {}
+    for c in pc.CURVES:
+        lo, hi = cur[c].quantile([0.0005, 0.9995])
+        edges[c] = np.linspace(lo, hi, BINS + 1)
+
+    # per session and part: histogram of every curve, slope sums
+    days = {}
+    for (d, p), idx in cur.groupby([session, part]).indices.items():
+        h = {}
         for c in pc.CURVES:
-            slope = g.groupby("window_id")[c].diff(SLOPE)
-            rows.append({"part": p, "curve": c, "q20": g[c].quantile(Q_LOW), "q80": g[c].quantile(Q_HIGH),
-                         "slope_sd": slope.std()})
-    return pd.DataFrame(rows).set_index(["part", "curve"])
+            x = cur[c].to_numpy()[idx]
+            x = x[~np.isnan(x)]
+            h[c] = np.bincount(np.clip(np.searchsorted(edges[c], x, side="right") - 1, 0, BINS - 1), minlength=BINS)
+            sl = slopes[c].to_numpy()[idx]
+            sl = sl[~np.isnan(sl)]
+            h[c + "_s"] = np.array([len(sl), sl.sum(), (sl ** 2).sum()])
+        days[(d, p)] = h
+
+    rows = []
+    sessions = sorted({d for d, _ in days})
+    for p in ("night", "rth"):
+        own = [d for d in sessions if (d, p) in days]
+        for d in own:
+            prior = [e for e in own if d - pd.Timedelta(days=TRAILING_DAYS) <= e < d]
+            if len(prior) < MIN_SESSIONS:
+                continue
+            for c in pc.CURVES:
+                counts = sum(days[(e, p)][c] for e in prior)
+                cum = np.cumsum(counts) / counts.sum()
+                q_lo = edges[c][np.searchsorted(cum, Q_LOW)]
+                q_hi = edges[c][np.searchsorted(cum, Q_HIGH) + 1]
+                n, s1, s2 = sum(days[(e, p)][c + "_s"] for e in prior)
+                sd = np.sqrt(max(s2 / n - (s1 / n) ** 2, 0)) if n > 1 else np.nan
+                rows.append({"session": d.date(), "part": p, "curve": c, "q20": q_lo, "q80": q_hi, "slope_sd": sd,
+                             "prior_sessions": len(prior)})
+    return pd.DataFrame(rows)
 
 
-def window_events(c: pd.DataFrame, mid: np.ndarray, th: pd.DataFrame, part: str) -> dict[str, int]:
+def window_events(c: pd.DataFrame, mid: np.ndarray, th: pd.DataFrame) -> dict[str, int]:
+    """th: the thresholds of the window, indexed by curve."""
     ev = {}
 
     def add(name: str, i: int):
@@ -135,7 +176,7 @@ def window_events(c: pd.DataFrame, mid: np.ndarray, th: pd.DataFrame, part: str)
 
     for curve in pc.CURVES:
         x = c[curve].to_numpy(float)
-        q20, q80, sd = th.loc[(part, curve), ["q20", "q80", "slope_sd"]]
+        q20, q80, sd = th.loc[curve, ["q20", "q80", "slope_sd"]]
         add(f"{curve}_hi", first_hold(x >= q80))
         add(f"{curve}_lo", first_hold(x <= q20))
         for sign in SIGNED.get(curve, ()):
@@ -160,11 +201,11 @@ def main(pivots: str, flow: str, out_dir: str) -> None:
     search = (pd.to_datetime(m.window_id.map(windows.session)).dt.year == SEARCH_YEAR).to_numpy()
     cur = pc.curves(m, windows, search)
     u = pc.normalized_time(cur, windows)
-    part = cur.window_id.map(windows.part)
-    year = pd.to_datetime(cur.window_id.map(windows.session)).dt.year
-    th = thresholds(cur, part, year)
+    th = rolling_thresholds(cur, windows)
+    by_day = {key: g.set_index("curve") for key, g in th.groupby(["session", "part"])}
 
     rows = []
+    studied = []
     t0 = windows.entry_minute
     for wid, idx in cur.groupby("window_id", sort=False).indices.items():
         seconds = cur.second.to_numpy()[idx]
@@ -172,7 +213,11 @@ def main(pivots: str, flow: str, out_dir: str) -> None:
         idx = idx[keep]
         if len(idx) == 0:
             continue
-        ev = window_events(cur.iloc[idx], m.mid_att.to_numpy()[idx], th, windows.part[wid])
+        key = (pd.Timestamp(windows.session[wid]).date(), windows.part[wid])
+        if key not in by_day:
+            continue
+        studied.append(wid)
+        ev = window_events(cur.iloc[idx], m.mid_att.to_numpy()[idx], by_day[key])
         for name, i in ev.items():
             rows.append({"window_id": wid, "event": name, "second": int(cur.second.iat[idx[i]]),
                          "u": round(float(u.iat[idx[i]]), 4)})
@@ -183,15 +228,15 @@ def main(pivots: str, flow: str, out_dir: str) -> None:
     events["year"] = pd.to_datetime(w.session).dt.year.to_numpy()
 
     os.makedirs(out_dir, exist_ok=True)
-    th.to_csv(os.path.join(out_dir, "thresholds.csv"))
+    th.to_csv(os.path.join(out_dir, "thresholds.csv"), index=False)
     events.to_csv(os.path.join(out_dir, "events.csv.gz"), index=False)
     with open(os.path.join(out_dir, "catalog.md"), "w", encoding="utf-8") as f:
-        f.write(catalog(events, windows))
+        f.write(catalog(events, windows.loc[studied]))
 
 
 def catalog(events: pd.DataFrame, windows: pd.DataFrame) -> str:
     n = windows.assign(year=pd.to_datetime(windows.session).dt.year).groupby(["year", "part"]).size()
-    lines = ["# Eseménykatalógus (küszöbök 2024-ből)", "",
+    lines = [f"# Eseménykatalógus (csúszó küszöbök: az előző {TRAILING_DAYS} nap ablakaiból, ülésszakonként)", "",
              "Ablakok: " + ", ".join(f"{y} {p}: {c}" for (y, p), c in n.items()), "",
              "gyak. = az ablakok hány %-ában történik meg; u = a medián normalizált idő (T0 = -1, csúcs = 0, vég = +1);",
              "előtte = hány %-ban a csúcs előtt. A 2025-ös gyakoriság az ellenőrzés: nagy eltérés instabil eseményt jelez.", ""]

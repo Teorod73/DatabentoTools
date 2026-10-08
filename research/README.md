@@ -46,7 +46,7 @@ HVN min asymmetry 0.8, max overshoot 0.25, forgalommal súlyozva, a besorolás a
   támadó kontraktuson, N = a 30 s-os támadó volumen mediánja), nagy támadók / védők aránya, könyv balansz, volumen.
   Normalizált idő (T0 = -1, csúcs = 0, vég = +1), 40 sáv, medián és kvartilisek éjszaka / RTH és High / Low szerint.
   Kimenet: `curves.csv.gz`, `shape.csv`, `shape.md`, `figures/<görbe>.png`. Alapból csak 2024 (a keresési év).
-- `pivot_sequences.py <pivotsDir> <flowDir> <outDir>`: a 4. lépés. Eseménykatalógus a görbékből (küszöbök csak
-  2024-ből, ülésszakonként): q95 / q5 szint 15 s-ig, előjelváltás, CUSUM-meredekségváltás, tetőzés, keresztezés,
+- `pivot_sequences.py <pivotsDir> <flowDir> <outDir>`: a 4. lépés. Eseménykatalógus a görbékből (csúszó küszöbök:
+  minden ablaknál az előző 60 nap ablakaiból, ülésszakonként, legalább 20 korábbi seansz kell): q95 / q5 szint 15 s-ig, előjelváltás, CUSUM-meredekségváltás, tetőzés, keresztezés,
   divergencia; minden eseményből az első előfordulás T0 után (a T0-kor már fennálló állapot csak egy megszakadás után
   számít). Kimenet: `thresholds.csv`, `events.csv.gz` (ablak, esemény, másodperc, normalizált idő), `catalog.md`.

@@ -150,6 +150,15 @@ sorrend, és hogy minden esemény az ablakon belül történjen.
   RTH 3,62 → 2,83 kontraktus / kötés), és a görbék szélsőértékei már 2024-en belül is folyamatosan húzódnak össze
   (éjszakai def_refill q95: 2024 Q1 0,87 → Q4 0,75 → 2025 Q2 0,52). A fix 2024-es küszöb és a fix 20/60 kontraktusos
   nagy-küszöb ezért rezsimfüggő. Javaslat: csúszó küszöbök (az előző kb. 60 nap ablakaiból, ülésszakonként).
+- **Csúszó küszöbök (2026-10-08 döntés):** minden ablak küszöbei (q95/q5, a meredekség szórása) az előző 60 naptári
+  nap ablakaiból, ülésszakonként, a saját seansz nélkül; legalább 20 korábbi seansz kell (2024 eleje kimarad:
+  vizsgált 2024 night 1367, rth 765, 2025 night 1511, rth 862). Ezzel a két év esemény-gyakorisága közti eltérés
+  mediánja 2,1 pont, egy esemény sem tér el 10 pontnál többel (előtte 36). Élőben is így számolható.
+- **Relatív nagy-küszöb (döntés):** a fix 60/20 helyett naponta relatív. A `pivots` mód most 20 küszöbbel (5-400)
+  írja a nagy sorozatok volumenét és a `series/<name>.csv.gz`-be a teljes nap sorozatméret-eloszlását. Terv: a
+  küszöb az a méret, amely fölött az előző 60 nap front kontraktusának agresszív volumenéből ugyanakkora rész esik,
+  mint 2025 utolsó 60 napján a 60-as (RTH) / 20-as (éjszaka) küszöb fölött (a felhasználó a 60/20-at a mostani piachoz
+  állította be). A felhasználónak újra kell futtatnia a `pivots`-ot (`--force`).
 
 ## Nyitott kérdések, következő lépések
 
