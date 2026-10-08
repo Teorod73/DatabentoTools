@@ -126,6 +126,16 @@ sorrend, és hogy minden esemény az ablakon belül történjen.
   iceberg: F a látható méretnél nagyobb, utána M ugyanazon a rendelésen visszaállítja a látható részt (új A nincs).
 - Ezért a `pivots` könyvkezelése (2026-10-08 javítás): a C/M-nél az összes függő fill teljesült, csak a fill után
   megmaradónál kisebb méret cancel, a nagyobb `*_reload` (nem add). A `pivots` futtatás most jöhet.
+- `pivots` futtatás kész (2026-10-08): 4668 ablak, minden sor megvan, a buy/sell 100%-ban egyezik az `extract`
+  másodperceivel. Keresztben álló könyv: 4 ablak 10:00:00 ET-kor 5-10 s-ig (valószínűleg CME velocity logic hírkor),
+  és 1 ablak a 17:00-18:00 szüneten át (kizárva, `crosses_break`) → **4667 ablak**. 9 pár ablaknak azonos a kezdete
+  és a vége (két közeli csúcs), bent hagyva. Arányok az agresszív volumenhez: fill 50,5% oldalanként, refill 20%,
+  ebből látható 19,7%, natív iceberg 0,5%, reload 0,7%.
+- 3. lépés (`research/pivot_curves.py`, ResearchData `results/pivots/curves/`, csak 2024): a High és a tükrözött
+  Low görbéi szinte azonosak (összevonhatók). A csúcs előtt „gyorsulás” (delta, hatékonyság, volumen, nagy támadók
+  felfut, a védő refill a csúcsig csökken), a fordulás jelei a csúcs után jönnek. A sávok szélesek. Mechanikus
+  (az ár mozgásából következő) görbék: delta, hatékonyság, és a fix sávú **balansz** (V alakú, mert a csúcson a
+  sáv teteje közel van: a sáv geometriája, nem orderflow; ár-szintenkénti sűrűséggel kell újradefiniálni).
 
 ## Nyitott kérdések, következő lépések
 

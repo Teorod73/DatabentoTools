@@ -40,3 +40,9 @@ HVN min asymmetry 0.8, max overshoot 0.25, forgalommal súlyozva, a besorolás a
   nyitó + 20 tick). Kizárva: nincs kezdet vagy vég, 16:00-20:00, a High gyertyája a belépő gyertya, UTC napon
   átnyúló ablak. Kimenet: `windows.csv`, `pivot_events.csv` (a DatabentoExtract `pivots` bemenete, 30 s-mal T0
   előttről) és `summary.md`. Csak a fejlesztési időszak (2025-12-31-ig).
+- `pivot_curves.py <pivotsDir> <flowDir> <outDir> [year]`: a 3. lépés. A `pivots` másodperces adataiból 30 s-os
+  gördülő görbék a csúcs oldalára tükrözve (High-nál a vevők a támadók, az Ask a védő oldal): delta, kivett /
+  (kivett + betett) mindkét oldalon, refill, natív iceberg, hatékonyság (középár-elmozdulás ATR1-ben az utolsó N
+  támadó kontraktuson, N = a 30 s-os támadó volumen mediánja), nagy támadók / védők aránya, könyv balansz, volumen.
+  Normalizált idő (T0 = -1, csúcs = 0, vég = +1), 40 sáv, medián és kvartilisek éjszaka / RTH és High / Low szerint.
+  Kimenet: `curves.csv.gz`, `shape.csv`, `shape.md`, `figures/<görbe>.png`. Alapból csak 2024 (a keresési év).

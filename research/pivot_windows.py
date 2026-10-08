@@ -20,7 +20,7 @@ For a high (a low is mirrored):
 A swing found by both ZigZag levels is one window (flags m03, m05). The part of the day is decided by Tx:
 night 20:00-09:30, rth 09:30-16:00, the rest (16:00-20:00) is not studied. Excluded: no start or end, the high bar is
 the entry bar (no whole minute before the high), the window with its 30 s warm up crosses a UTC day (the MBO files are
-UTC days, the book is rebuilt from the snapshot of each file). Only the development period is used (sessions up to
+UTC days, the book is rebuilt from the snapshot of each file) or the 17:00-18:00 ET break (the book is in pre-open). Only the development period is used (sessions up to
 lastSession, default 2025-12-31).
 
 Outputs: windows.csv (one row per swing, valid = studied), pivot_events.csv (the valid windows for
@@ -156,13 +156,18 @@ def mark_valid(df: pd.DataFrame) -> pd.DataFrame:
     start_day = (df.entry_minute - WARM_UP) // 86400
     end_day = (df.end_minute - 1) // 86400
     df["crosses_day"] = start_day != end_day
-    df["valid"] = ((df.part != "none") & ~df.no_start & ~df.no_end & (df.bars_before > 0) & ~df.crosses_day)
+    # the 17:00-18:00 ET break: the session of the window start and of its end differ
+    et = lambda seconds: pd.to_datetime(seconds, unit="s", utc=True).dt.tz_convert(zz.ET)
+    session_of = lambda t: (t + pd.Timedelta(hours=6)).dt.date
+    df["crosses_break"] = session_of(et(df.entry_minute - WARM_UP)) != session_of(et(df.end_minute - 1))
+    df["valid"] = ((df.part != "none") & ~df.no_start & ~df.no_end & (df.bars_before > 0) & ~df.crosses_day
+                   & ~df.crosses_break)
     df["window_id"] = df.type.str[0] + df.swing_minute.astype(str)
     return df
 
 
 def export_events(df: pd.DataFrame, path: str) -> None:
-    ok = df[df.valid].sort_values("entry_minute")
+    ok = df[df.valid].sort_values(["entry_minute", "swing_minute", "window_id"])
     out = pd.DataFrame({"window_id": ok.window_id, "instrument_id": ok.instrument_id,
                         "start_second": ok.entry_minute - WARM_UP, "end_second": ok.end_minute,
                         "band_low": ok.band_low, "band_high": ok.band_high})
@@ -187,7 +192,8 @@ def summary(df: pd.DataFrame, multiple: float, last_session: str) -> str:
     ok = df[df.valid]
     lines += ["", f"Van kezdet és vég (night / rth): {len(studied)}. Kizárva, mert a High gyertyája a belépő gyertya "
               f"(nincs egész perc a High előtt): {(studied.bars_before == 0).sum()}, mert átnyúlik egy UTC napon: "
-              f"{(studied.crosses_day & (studied.bars_before > 0)).sum()}.",
+              f"{(studied.crosses_day & (studied.bars_before > 0)).sum()}, mert átnyúlik a 17:00-18:00 szüneten: "
+              f"{(studied.crosses_break & ~studied.crosses_day & (studied.bars_before > 0)).sum()}.",
               f"**Vizsgált ablakok: {len(ok)}** (night {(ok.part == 'night').sum()}, rth {(ok.part == 'rth').sum()}). "
               f"Ebből az ablak 09:30 előtt kezdődik, de a forduló 09:30 után van: "
               f"{((ok.part == 'rth') & (ok.entry_part == 'night')).sum()}.", ""]
