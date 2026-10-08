@@ -66,3 +66,8 @@ HVN min asymmetry 0.8, max overshoot 0.25, forgalommal súlyozva, a besorolás a
   futásból jön. `confirm_minute`: az első alacsonyabb gyertya zárása (élőben innen létezik a jelölt). Kimenet: `candidates.csv`, `candidate_events.csv`, `summary.md`. A próbába kerülő minták
   (`selected_patterns.csv`): ülésszakonként, hosszonként (3, 4) és családonként (minden / csak könyv-orderflow) a
   2024-ben átment 10 leggyakoribb, csak a 2024-es adatból választva.
+- `pattern_trades.py <resultsDir> <researchDataDir> <outDir>`: a 6. lépés, gazdasági próba. A ZigZag-jelöltek (adat a
+  `pivots` futásból) és a nem ZigZag-jelöltek 10%-os mintája (`candidates/pivots`, súly 10) görbéi és eseményei a
+  fordulóablakok csúszó küszöbeivel; a kiválasztott minták teljesülésekor kötés a CLAUDE.md-ben rögzített szabályokkal
+  (belépés legkorábban a megerősítéskor, stop a szélsőérték + 2 tick, kockázat ≤ 2 x ATR1, 1R / 2R / 3R, 60 perc).
+  Kimenet: `trades.csv.gz`, `summary.md`.

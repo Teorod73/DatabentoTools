@@ -213,9 +213,12 @@ def volume_window_sums(m: pd.DataFrame, columns: list[str], n_by_part: pd.Series
     return pd.DataFrame(sums, index=m.index)
 
 
-def curves(m: pd.DataFrame, windows: pd.DataFrame, base: np.ndarray | None = None) -> pd.DataFrame:
+def curves(m: pd.DataFrame, windows: pd.DataFrame, base: np.ndarray | None = None,
+           norms: tuple[pd.Series, pd.Series] | None = None) -> pd.DataFrame:
     """base: the rows whose medians give N of the volume windows, normalize the volume and give N of the efficiency
-    (default all rows); with more years only the search year should be the base.
+    (default all rows); with more years only the search year should be the base. norms: (N of the volume windows,
+    N of the efficiency) per part of day instead of base (other windows, e.g. the candidates, with the N of the
+    swing windows); curves.attrs["norms"] keeps the ones used.
 
     The ratio curves are sums over the last N aggressor contracts (N = the median aggressor volume of 30 s in the
     part of day), not over a fixed time: the noise of a ratio depends on how many contracts it is made of, and a
@@ -226,7 +229,7 @@ def curves(m: pd.DataFrame, windows: pd.DataFrame, base: np.ndarray | None = Non
     w = m.window_id.map(windows.part)
     base = np.ones(len(m), bool) if base is None else base
     vol30 = roll30("att_vol") + roll30("def_vol")
-    n_total = vol30[base].groupby(w[base]).median()
+    n_total = vol30[base].groupby(w[base]).median() if norms is None else norms[0]
     columns = ["att_vol", "def_vol", "def_cancel_w1", "def_add_w1", "att_cancel_w1", "att_add_w1", "def_refill",
                "att_refill", "def_hidden", "att_large", "def_large"]
     sums = volume_window_sums(m, columns, n_total, w)
@@ -252,7 +255,7 @@ def curves(m: pd.DataFrame, windows: pd.DataFrame, base: np.ndarray | None = Non
     out["volume"] = vol30 / typical
 
     # efficiency over a fixed number of contracts (the median 30 s attacker volume of the part of day)
-    n_att = roll30("att_vol")[base].groupby(w[base]).median()
+    n_att = roll30("att_vol")[base].groupby(w[base]).median() if norms is None else norms[1]
     atr = m.window_id.map(windows.atr1)
     out["att_eff"] = np.nan
     out["def_eff"] = np.nan
@@ -263,6 +266,7 @@ def curves(m: pd.DataFrame, windows: pd.DataFrame, base: np.ndarray | None = Non
         out.loc[idx, "def_eff"] = -efficiency(mid, m.def_vol.to_numpy()[idx], n_att[part]) / windows.atr1[wid]
 
     out.loc[m.crossed.to_numpy() == 1, CURVES] = np.nan
+    out.attrs["norms"] = (n_total, n_att)
     return out
 
 
