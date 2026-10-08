@@ -53,3 +53,8 @@ HVN min asymmetry 0.8, max overshoot 0.25, forgalommal súlyozva, a besorolás a
   minden ablaknál az előző 60 nap ablakaiból, ülésszakonként, legalább 20 korábbi seansz kell): q95 / q5 szint 15 s-ig, előjelváltás, CUSUM-meredekségváltás, tetőzés, keresztezés,
   divergencia; minden eseményből az első előfordulás T0 után (a T0-kor már fennálló állapot csak egy megszakadás után
   számít). Kimenet: `thresholds.csv`, `events.csv.gz` (ablak, esemény, másodperc, normalizált idő), `catalog.md`.
+- `pivot_patterns.py <sequencesDir> <outDir>`: az 5. lépés. Rendezett eseményminták (párok, hármasok, négyesek) a
+  fordulóablakokban, 2024-en keresve, 2025-ön ellenőrizve, ülésszakonként, a High és a Low együtt. Véletlen szint:
+  1000 keverés; döntő az „időzítés” keverés (minden esemény megtartja a saját időzítését és gyakoriságát, csak az
+  ablakok keverednek), a sima és a szigorú keverés csak tájékoztató (őket a tipikus időzítés becsapja). Kimarad: a
+  mindkét évben ≥ 90%-os esemény és az azonos görbéből vett két esemény. Kimenet: `patterns.csv.gz`, `patterns.md`.
