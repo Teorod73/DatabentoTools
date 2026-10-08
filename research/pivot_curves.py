@@ -6,8 +6,10 @@ pivotsDir: windows.csv of pivot_windows.py, flowDir: the pivots/<name>.csv.gz fi
 Only the valid windows of the year (default 2024, the search year) are used; 2025 stays for the check.
 
 Every curve is mirrored to the side of the swing: at a high the attackers are the buyers and the defenders the
-sellers (the ask side), at a low the other way round. Rolling sums over the last 30 seconds (the rows start 30 s
-before T0, so the first value at T0 is complete). The seconds with a crossed book have no curve values.
+sellers (the ask side), at a low the other way round. The ratio curves are sums over the last N aggressor contracts
+(buy + sell, N = the median aggressor volume of 30 s in the part of day of the base year), so the noise of a ratio
+does not depend on how busy the market is; the volume curve is the volume of the last 30 seconds. The seconds with a
+crossed book have no curve values.
 
     delta          (attacker - defender aggressor volume) / (sum)                                         -1..1
     def_cancel     defending side: cancelled / (cancelled + added) inside the band, weighted 1 / (1 + d)    0..1
@@ -120,13 +122,45 @@ def efficiency(mid: np.ndarray, volume: np.ndarray, n: float) -> np.ndarray:
     return out
 
 
+def volume_window_sums(m: pd.DataFrame, columns: list[str], n_by_part: pd.Series, part: pd.Series) -> pd.DataFrame:
+    """Sums of the columns over the last seconds that hold at least N aggressor contracts (buy + sell): for every
+    second the shortest run of seconds ending there with N contracts, N per part of day. Whole seconds, so the run
+    can hold up to one second of volume more than N. NaN while the window has not traded N contracts yet."""
+    sums = {c: np.full(len(m), np.nan) for c in columns}
+    volume = (m.att_vol + m.def_vol).to_numpy(float)
+    values = {c: m[c].to_numpy(float) for c in columns}
+    for wid, idx in m.groupby("window_id", sort=False).indices.items():
+        n = n_by_part[part.iat[idx[0]]]
+        cum = np.concatenate([[0.0], np.cumsum(volume[idx])])
+        end = np.arange(1, len(idx) + 1)
+        start = np.searchsorted(cum, cum[end] - n, side="right") - 1      # cum[start] <= cum[end] - n
+        ok = cum[end] >= n
+        for c in columns:
+            cs = np.concatenate([[0.0], np.cumsum(values[c][idx])])
+            out = np.full(len(idx), np.nan)
+            out[ok] = cs[end[ok]] - cs[start[ok]]
+            sums[c][idx] = out
+    return pd.DataFrame(sums, index=m.index)
+
+
 def curves(m: pd.DataFrame, windows: pd.DataFrame, base: np.ndarray | None = None) -> pd.DataFrame:
-    """base: the rows whose medians normalize the volume and give N of the efficiency (default all rows); with more
-    years only the search year should be the base."""
+    """base: the rows whose medians give N of the volume windows, normalize the volume and give N of the efficiency
+    (default all rows); with more years only the search year should be the base.
+
+    The ratio curves are sums over the last N aggressor contracts (N = the median aggressor volume of 30 s in the
+    part of day), not over a fixed time: the noise of a ratio depends on how many contracts it is made of, and a
+    fixed time window holds more of them when the market is busier (2025 had about 25% more trades than 2024)."""
     m = m.sort_values(["window_id", "second"]).reset_index(drop=True)
     g = m.groupby("window_id", sort=False)
-    roll = lambda c: g[c].transform(lambda x: x.rolling(ROLL, min_periods=ROLL).sum())
+    roll30 = lambda c: g[c].transform(lambda x: x.rolling(ROLL, min_periods=ROLL).sum())
     w = m.window_id.map(windows.part)
+    base = np.ones(len(m), bool) if base is None else base
+    vol30 = roll30("att_vol") + roll30("def_vol")
+    n_total = vol30[base].groupby(w[base]).median()
+    columns = ["att_vol", "def_vol", "def_cancel_w1", "def_add_w1", "att_cancel_w1", "att_add_w1", "def_refill",
+               "att_refill", "def_hidden", "att_large_20", "att_large_60", "def_large_20", "def_large_60"]
+    sums = volume_window_sums(m, columns, n_total, w)
+    roll = lambda c: sums[c]
     att, dfn = roll("att_vol"), roll("def_vol")
 
     def ratio(a, b):
@@ -146,13 +180,11 @@ def curves(m: pd.DataFrame, windows: pd.DataFrame, base: np.ndarray | None = Non
     out["def_large"] = ratio(pd.Series(large_def), dfn)
     rest_d, rest_a = m.def_rest / m.def_levels, m.att_rest / m.att_levels
     out["balance"] = ratio(rest_d - rest_a, rest_d + rest_a)
-    base = np.ones(len(m), bool) if base is None else base
-    vol = att + dfn
-    typical = w.map(vol[base].groupby(w[base]).median())
-    out["volume"] = vol / typical
+    typical = w.map(n_total)
+    out["volume"] = vol30 / typical
 
     # efficiency over a fixed number of contracts (the median 30 s attacker volume of the part of day)
-    n_att = att[base].groupby(w[base]).median()
+    n_att = roll30("att_vol")[base].groupby(w[base]).median()
     atr = m.window_id.map(windows.atr1)
     out["att_eff"] = np.nan
     out["def_eff"] = np.nan

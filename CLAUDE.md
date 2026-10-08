@@ -144,6 +144,12 @@ sorrend, és hogy minden esemény az ablakon belül történjen.
   esemény ablakonként, 19 esemény mindkét évben ≥ 90%. **Gond:** 2025-ben sok arány-esemény ritkább (pl. delta_hi éjszaka
   33% → 17%, def_refill_hi 39% → 14%), mert 2025-ben több a kötés (éjszaka +25%, RTH +29% / s), és a 30 s-os
   arányok kevésbé szélsőségesek. Javaslat: az arány-görbék gördülő ablaka fix idő helyett fix kontraktusszám legyen.
+- Kontraktus-alapú ablak (2026-10-08): az arány-görbék az utolsó N agresszív kontraktuson (N = 2024 30 s-os medián
+  volumene ülésszakonként), a meglévő másodperces adatból (C# újrafuttatás nem kellett). **Nem oldotta meg** a
+  2025-ös eltolódást (még mindig 36 esemény > 10 pont eltérés). Az ok: a kötésméret csökken (átlag éjszaka 2,88 → 2,38,
+  RTH 3,62 → 2,83 kontraktus / kötés), és a görbék szélsőértékei már 2024-en belül is folyamatosan húzódnak össze
+  (éjszakai def_refill q95: 2024 Q1 0,87 → Q4 0,75 → 2025 Q2 0,52). A fix 2024-es küszöb és a fix 20/60 kontraktusos
+  nagy-küszöb ezért rezsimfüggő. Javaslat: csúszó küszöbök (az előző kb. 60 nap ablakaiból, ülésszakonként).
 
 ## Nyitott kérdések, következő lépések
 
