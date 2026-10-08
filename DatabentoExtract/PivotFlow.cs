@@ -39,7 +39,7 @@ public sealed class PivotWindow
 ///                            trade of the event there); native icebergs and implied liquidity (not in the MBO book)
 ///   {ask,bid}_refill_visible the refill without the hidden volume: max(0, A - H - Q0) per episode, H = hidden
 ///                            volume of the episode at its price
-///   large_{buy,sell}_{20,60} volume of the aggressor series of at least 20 / 60 contracts (AgressiveDetector:
+///   large_{buy,sell}_{L}     volume of the aggressor series of at least L contracts, L in LargeLimits (AgressiveDetector:
 ///                            same side trades within 10 ms of the first trade of the series), in the second the
 ///                            series is closed (by an opposite or unknown side trade or a record of the instrument
 ///                            later than 10 ms)
@@ -50,7 +50,8 @@ public sealed class PivotFlowCollector
 {
     private const long NanosPerSecond = 1_000_000_000;
     private const long SeriesTime = 10_000_000;     // 10 ms
-    private static readonly int[] LargeLimits = [20, 60];
+    // the large series thresholds: the curves pick one per day, relative to the series sizes of the previous days
+    public static readonly int[] LargeLimits = [5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 60, 80, 100, 125, 150, 200, 250, 300, 400];
 
     private sealed class Order
     {
@@ -600,14 +601,81 @@ public sealed class PivotFlowCollector
     }
 }
 
+/// <summary>
+/// Size distribution of the aggressor series of every instrument for the whole file (the large series threshold of
+/// the curves is relative to the previous days). A series as in PivotFlowCollector: same side trades within 10 ms of
+/// the first trade, closed by an opposite or unknown side trade or a record of the instrument later than 10 ms; the
+/// series open at the end of the file are closed then. Per instrument, UTC half hour of the first trade, side and
+/// size (sizes above MaxSize together at MaxSize): the number of series and their volume.
+/// </summary>
+public sealed class SeriesHistogram
+{
+    private const long SeriesTime = 10_000_000;
+    public const int MaxSize = 400;
+
+    private sealed class Series
+    {
+        public char Side;
+        public ulong First;
+        public long Volume;
+    }
+
+    private readonly Dictionary<uint, Series?> open = [];
+    private readonly Dictionary<(uint Id, long HalfHour, char Side, long Size), (long Count, long Volume)> counts = [];
+
+    public void Process(byte rtype, ReadOnlySpan<byte> record)
+    {
+        if (rtype != MboRecord.RType || record.Length < MboRecord.Size)
+            return;
+        var mbo = new MboRecord(record);
+        var id = mbo.InstrumentId;
+        var ts = mbo.Timestamp;
+        if (open.GetValueOrDefault(id) is { } current && ts - current.First > SeriesTime)
+            Close(id);
+        if (mbo.Action != 'T' || mbo.Price == MboRecord.UndefinedPrice)
+            return;
+        if (open.GetValueOrDefault(id) is { } other && other.Side != mbo.Side)
+            Close(id);
+        if (mbo.Side is not ('A' or 'B'))
+            return;
+        if (open.GetValueOrDefault(id) is { } same)
+            same.Volume += mbo.OrderSize;
+        else
+            open[id] = new Series { Side = mbo.Side, First = ts, Volume = mbo.OrderSize };
+    }
+
+    public void Finish()
+    {
+        foreach (var id in open.Keys.ToList())
+            Close(id);
+    }
+
+    private void Close(uint id)
+    {
+        if (open.GetValueOrDefault(id) is not { } series)
+            return;
+        open[id] = null;
+        var key = (id, (long)(series.First / 1_000_000_000) / 1800 * 1800, series.Side, Math.Min(series.Volume, (long)MaxSize));
+        var (count, volume) = counts.GetValueOrDefault(key);
+        counts[key] = (count + 1, volume + series.Volume);
+    }
+
+    public static string Header => "instrument_id,utc_half_hour,side,size,count,volume";
+
+    public IEnumerable<string> Rows() => counts
+        .OrderBy(e => e.Key.Id).ThenBy(e => e.Key.HalfHour).ThenBy(e => e.Key.Side).ThenBy(e => e.Key.Size)
+        .Select(e => $"{e.Key.Id},{e.Key.HalfHour},{e.Key.Side},{e.Key.Size},{e.Value.Count},{e.Value.Volume}");
+}
+
 public static class PivotProcessor
 {
-    // the windows that start in the UTC day of the file
+    // the windows that start in the UTC day of the file, and the series sizes of the whole file
     public static void Process(string path, string outDirectory, List<PivotWindow> allWindows, bool force, object consoleSync)
     {
         var name = FileProcessor.BaseName(path);
         var output = Path.Combine(outDirectory, "pivots", name + ".csv.gz");
-        if (!force && File.Exists(output))
+        var seriesOutput = Path.Combine(outDirectory, "series", name + ".csv.gz");
+        if (!force && File.Exists(output) && File.Exists(seriesOutput))
         {
             lock (consoleSync) Console.WriteLine($"{name}: already done, skipped");
             return;
@@ -621,27 +689,34 @@ public static class PivotProcessor
         var windows = allWindows.Where(w => w.StartSecond >= start && w.StartSecond < end).ToList();
 
         var collector = new PivotFlowCollector(windows);
-        if (windows.Count > 0)
+        var histogram = new SeriesHistogram();
+        DbnReader.ReadRecords(stream, (rtype, record) =>
         {
-            DbnReader.ReadRecords(stream, collector.Process);
-            collector.Finish();
-        }
+            collector.Process(rtype, record);
+            histogram.Process(rtype, record);
+        });
+        collector.Finish();
+        histogram.Finish();
 
-        Directory.CreateDirectory(Path.GetDirectoryName(output)!);
-        var temp = output + ".tmp";
+        WriteGzip(output, PivotFlowCollector.Header(), collector.Rows());
+        WriteGzip(seriesOutput, [SeriesHistogram.Header], histogram.Rows());
+
+        lock (consoleSync)
+            Console.WriteLine($"{name}: {windows.Count} windows in {stopwatch.Elapsed.TotalSeconds:0.0} s");
+    }
+
+    private static void WriteGzip(string path, IEnumerable<string> header, IEnumerable<string> rows)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var temp = path + ".tmp";
         using (var file = File.Create(temp))
         using (var gzip = new GZipStream(file, CompressionLevel.Optimal))
         using (var writer = new StreamWriter(gzip, new UTF8Encoding(false), 1 << 16))
         {
-            writer.WriteLine(string.Join(",", PivotFlowCollector.Header()));
-            foreach (var row in collector.Rows())
+            writer.WriteLine(string.Join(",", header));
+            foreach (var row in rows)
                 writer.WriteLine(row);
         }
-        File.Move(temp, output, true);
-
-        lock (consoleSync)
-            Console.WriteLine(windows.Count == 0
-                ? $"{name}: no windows"
-                : $"{name}: {windows.Count} windows in {stopwatch.Elapsed.TotalSeconds:0.0} s");
+        File.Move(temp, path, true);
     }
 }

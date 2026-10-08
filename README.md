@@ -59,11 +59,15 @@ ablak egy másodperce (UTC), minden forgalmi oszlop az abban a másodpercben tö
   (ez utóbbi nincs az MBO könyvben); a 2025-03-05-ös napon szinte csak natív iceberg (a fill a rejtett esetek 4193 /
   4194-ében fedi a kötést), az agresszív volumen 1,04%-a. `ask_refill_visible`, `bid_refill_visible`: a
   refill a rejtett volumen nélkül, epizódonként max(0, A - H - Q0), H = az epizód árán mért rejtett volumen.
-- `large_buy_20`, `large_sell_20`, `large_buy_60`, `large_sell_60`: legalább 20 / 60 kontraktusos agresszív sorozatok
-  volumene az AgressiveDetector logikájával (azonos oldali kötések az első kötéstől 10 ms-on belül), abban a
+- `large_buy_L`, `large_sell_L` (L = 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 60, 80, 100, 125, 150, 200, 250, 300,
+  400): legalább L kontraktusos agresszív sorozatok volumene az AgressiveDetector logikájával (azonos oldali kötések az első kötéstől 10 ms-on belül), abban a
   másodpercben, amikor a sorozat lezárul (ellentétes vagy oldal nélküli kötés, vagy a kontraktus 10 ms-nál későbbi
   rekordja).
 - `crossed`: 1, ha a legjobb bid nem kisebb a legjobb asknál (adatminőség).
+
+Ugyanez a futás a `series/<name>.csv.gz`-be a teljes fájl agresszív sorozatainak méreteloszlását is kiírja
+(instrument_id, az első kötés UTC félórája, oldal, méret 400-ig, a 400 fölöttiek 400-nál: darab és volumen). Ebből
+számolódik a napi relatív nagy-küszöb (a kötésméret 2024-2025-ben folyamatosan csökkent, a fix 20 / 60 rezsimfüggő).
 
 A legjobb árak egy esemény végén értékelődnek ki (a last flagű rekord vagy egy későbbi időbélyeg), nem az esemény
 minden rekordja után. A könyv minden fájlban a nap eleji snapshotból épül, ezért az UTC napon átnyúló ablakok nincsenek
@@ -89,5 +93,5 @@ python tests/make_pivot_test.py 1
 DatabentoExtract pivots pivot_test.mbo.dbn.zst pivot_test_windows.csv out
 ```
 
-A `pivots` teszt várt kimenete `pivot_test_expected.csv`, ezzel kell egyeznie a kicsomagolt
-`out/pivots/pivot_test.csv.gz`-nek.
+A `pivots` teszt várt kimenete `pivot_test_expected.csv` és `pivot_test_series_expected.csv`, ezekkel kell egyeznie a
+kicsomagolt `out/pivots/pivot_test.csv.gz`-nek és `out/series/pivot_test.csv.gz`-nek.

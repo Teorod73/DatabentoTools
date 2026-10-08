@@ -1,7 +1,8 @@
 """Synthetic MBO file, a pivot windows file and the expected order flow per second, computed independently of the
 C# PivotFlowCollector.
 
-    python make_pivot_test.py [seed]  ->  pivot_test.mbo.dbn.zst, pivot_test_windows.csv, pivot_test_expected.csv
+    python make_pivot_test.py [seed]  ->  pivot_test.mbo.dbn.zst, pivot_test_windows.csv, pivot_test_expected.csv,
+                                          pivot_test_series_expected.csv
 
 Life cycle as on GLBX.MDP3 (see make_book_test.py), events of several records share a timestamp and the last record
 of an event has the last flag. Trade bursts of one side within a few ms make the large aggressor series, some trades
@@ -22,7 +23,8 @@ TICK = 0.25
 NS = 10**9
 LAST = 0x80
 SERIES_NS = 10 * 10**6
-LIMITS = (20, 60)
+LIMITS = (5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 60, 80, 100, 125, 150, 200, 250, 300, 400)
+MAX_SIZE = 400
 day = datetime.date(2024, 3, 5)
 start = int(datetime.datetime(2024, 3, 5, tzinfo=datetime.timezone.utc).timestamp()) * NS
 
@@ -251,7 +253,7 @@ def replay(w):
     def reset_acc():
         acc.clear()
         acc.update(buy=0, sell=0, trades=0, last=None, high=None, low=None,
-                   large_buy=[0, 0], large_sell=[0, 0])
+                   large_buy=[0] * len(LIMITS), large_sell=[0] * len(LIMITS))
         for s in "AB":
             acc[s] = dict(add=0, add1=0.0, addl=0.0, cancel=0, cancel1=0.0, cancell=0.0, fill=0, reload=0, up=0, down=0, hidden=0)
 
@@ -309,7 +311,7 @@ def replay(w):
         row += [ta - written["A"], acc["A"]["up"], acc["A"]["down"], tb - written["B"], acc["B"]["up"], acc["B"]["down"]]
         va, vb = visible_total("A"), visible_total("B")
         row += [acc["A"]["hidden"], va - written["vA"], acc["B"]["hidden"], vb - written["vB"]]
-        for k in range(2):
+        for k in range(len(LIMITS)):
             row += [acc["large_buy"][k], acc["large_sell"][k]]
         row.append(1 if b is not None and a is not None and b >= a else 0)
         rows.append(",".join(map(str, row)))
@@ -477,4 +479,41 @@ with open("pivot_test_expected.csv", "w") as f:
     for w in sorted(windows, key=lambda w: w["start"]):
         for row in replay(w):
             f.write(row + "\n")
+
+# ------------------------------------------------------------------------------------------ series sizes
+counts = {}
+open_series = {}
+
+
+def close(iid):
+    series = open_series.pop(iid, None)
+    if series is None:
+        return
+    side, first, volume = series
+    key = (iid, first // NS // 1800 * 1800, side, min(volume, MAX_SIZE))
+    c, v = counts.get(key, (0, 0))
+    counts[key] = (c + 1, v + volume)
+
+
+for (t, iid, action, side, price, size, oid, flags) in records:
+    if iid in open_series and t - open_series[iid][1] > SERIES_NS:
+        close(iid)
+    if action != "T":
+        continue
+    if iid in open_series and open_series[iid][0] != side:
+        close(iid)
+    if side not in "AB":
+        continue
+    if iid in open_series:
+        s_, f_, v_ = open_series[iid]
+        open_series[iid] = (s_, f_, v_ + size)
+    else:
+        open_series[iid] = (side, t, size)
+for iid in list(open_series):
+    close(iid)
+with open("pivot_test_series_expected.csv", "w") as f:
+    f.write("instrument_id,utc_half_hour,side,size,count,volume\n")
+    for key in sorted(counts):
+        f.write(",".join(map(str, key + counts[key])) + "\n")
+
 print(len(records), "records", len(windows), "windows")
