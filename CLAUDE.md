@@ -185,6 +185,13 @@ sorrend, és hogy minden esemény az ablakon belül történjen.
   ZigZag-jelölten teljesülő minta önmagában nem cáfolja a mintát, a gazdasági próba (nettó R) dönt. Kiválasztott minták
   (`selected_patterns.csv`, csak 2024-ből): 70. A felhasználónak le kell futtatnia a `pivots`-ot a
   `candidate_events.csv`-re.
+- **A gazdasági próba szabályai (2026-10-08 döntés, az eredmények előtt rögzítve):** High-nál short, Low-nál long.
+  Belépés a minta utolsó eseményének másodpercében, középáron, legkorábban a jelölt megerősítésekor (az első
+  alacsonyabb gyertya zárása, `confirm_minute`). Stop: a jelölt csúcsa + 2 tick, nem mozdul. Kockázati korlát: ha a
+  kockázat > 2 x ATR1, nincs kötés. Cél: 1R, 2R és 3R külön. 60 perc vagy seansz vége után kilépés záróáron. Költség:
+  stopnál 1 tick csúszás, 0,08 pont jutalék. Mellette MAE / MFE (R-ben és ATR1-ben), precizitás (tájékoztató),
+  összevetés minden jelölttel minta nélkül. Mintánként, éjszaka / RTH, 2024 / 2025 külön (2025 az ellenőrzés), a nem
+  ZigZag-jelöltek 10-es súllyal.
 
 ## Nyitott kérdések, következő lépések
 
