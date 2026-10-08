@@ -27,7 +27,7 @@ bármit csinálsz. Ha valami ellentmond a kódnak, a kód az igaz, és ezt jelez
   `research/README.md`.
 - **Teorod73/ResearchData**: `minute/`, `seconds/`, `instruments/` (az extract kimenete) és `results/`
   (`sessions.csv`, `levels.csv`, `bars_1min.csv.gz`, `reverse/`, `events/`, `book/`, `book_analysis/`, `refine/`,
-  `holdout/`). A cloud környezetben `/home/user/researchdata`-ba klónozva használtuk.
+  `holdout/`, `pivots/`). A cloud környezetben `/home/user/researchdata`-ba klónozva használtuk.
 
 ## Adat
 
@@ -86,6 +86,34 @@ bármit csinálsz. Ha valami ellentmond a kódnak, a kód az igaz, és ezt jelez
 - 2025 nem független ellenőrzés (a jellemzőket mindkét év alapján választottam), 2026 az.
 - Short minden évben erősebb (2026: short +0,21, long +0,10, egy pozícióval). Utólagos bontás, nem hangolni rá.
 - Kockázat mediánja kb. 10 pont (0,11 ATR); nyerési arány (2R) kb. 31–34%.
+
+## Új vizsgálat: orderflow-sorrend a ZigZag fordulóknál (2026-10-08-tól)
+
+Cél: a fordulók (csak ezek, jelöltek / kontrollcsoport nélkül, a felhasználó döntése) ablakában másodpercenként mért
+görbék eseményeinek **sorrendjében** szabályosságot találni (Absorption / Exhaustion). Az idő nem számít, csak a
+sorrend, és hogy minden esemény az ablakon belül történjen.
+
+- Fordulók: ZigZag TimeOfDay 0,3 (sárga) és 0,5 (kék). Ablak 2 x ATR1-gyel kezdve (később 2,5 / 3 / 3,5 / 4 is).
+  ATR1 = ATR(20) 1 perces, a High előtti gyertyán (T0-é körkörös lenne). High-nál: szint = High - 2 x ATR1, T0 = visszafelé az utolsó szint alatti gyertya zárása,
+  vége = a High utáni első szint alatti gyertya. Low tükrözve.
+- Külön: éjszaka 20:00-09:30 és RTH 09:30-16:00 (Tx szerint); 16:00-20:00 nem vizsgált. Nagy agresszív küszöb:
+  RTH 60, éjszaka 20, az AgressiveDetector logikájával (Custom: `Indicators/GM/AgressiveDetector.cs`, azonos oldali
+  kötések az első kötéstől 10 ms-on belül összegezve).
+- Görbék (30 s gördülő, másodpercenként): delta%, Ask/Bid cancel a sávban (távolsággal súlyozva: 1/(1+tick) és
+  lineáris is), Ask/Bid refill a BestAsk/BestBid-en (folyamatosan: max(0, eddigi agresszív - kezdő passzív)),
+  vevő/eladó hatékonyság (pont / kontraktus fix volumenkosárral), nagy vevők/eladók aránya, könyv balansz
+  (A-B)/(A+B). A könyvsáv két fix ár: belépő gyertya nyitó ± N x ATR1, közös N (lásd lent).
+- Események: kvantilis-szintek (q20/q80, 2024-ből, ülésszakonként), 5 s hiszterézis, első előfordulás, CUSUM
+  meredekségváltozás, keresztezések, divergenciák (új csúcs gyengébb görbével), agresszív volumen tetőzés.
+- Mintakeresés: rendezett részsorozatok gyakorisága; véletlen szint permutációs próbával (sima: fordulón belüli
+  keverés; szigorú: keverés csak a High előtti és utáni részen belül), 99%-os küszöb. Rangsor: gyakoriság, holtversenynél
+  a lefutás elején teljesülő. Párok -> hármasok -> négyesek csak átment mintákból. 2024-en keresés, 2025-ön ellenőrzés,
+  utána gazdasági próba mindkét keverés mintáira (a teljes seanszokon is, a téves jelek miatt).
+- 1. lépés kész (`research/pivot_windows.py`, ResearchData `results/pivots/`): 2024-2025-ben 5203 vizsgálható forduló
+  (éjszaka 3397, RTH 1806); 1202 kiesik, mert a láb rövidebb 2 x ATR1-nél (nincs kezdet vagy vég). Medián ablak:
+  3-4 perc a High előtt, 5-6 perc utána. A 20 tick feltétel éjszaka ATR1-ben nagy (ATR1 medián 1,16 pont, 20 tick
+  kb. 4 ATR1): k medián éjszaka 7,2, RTH 4,5, max 56 (08:30-as hírtüskék, egyperces ablak). Nyitott döntés: N
+  (javaslat: N x ATR1, de legalább egy fix pontérték, pl. N = 8 és legalább 15 pont).
 
 ## Nyitott kérdések, következő lépések
 
