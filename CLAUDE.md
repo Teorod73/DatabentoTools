@@ -102,18 +102,24 @@ sorrend, és hogy minden esemény az ablakon belül történjen.
 - Görbék (30 s gördülő, másodpercenként): delta%, Ask/Bid cancel a sávban (távolsággal súlyozva: 1/(1+tick) és
   lineáris is), Ask/Bid refill a BestAsk/BestBid-en (folyamatosan: max(0, eddigi agresszív - kezdő passzív)),
   vevő/eladó hatékonyság (pont / kontraktus fix volumenkosárral), nagy vevők/eladók aránya, könyv balansz
-  (A-B)/(A+B). A könyvsáv két fix ár: belépő gyertya nyitó ± N x ATR1, közös N (lásd lent).
+  (A-B)/(A+B). A könyvsáv két fix ár (lásd lent).
 - Események: kvantilis-szintek (q20/q80, 2024-ből, ülésszakonként), 5 s hiszterézis, első előfordulás, CUSUM
   meredekségváltozás, keresztezések, divergenciák (új csúcs gyengébb görbével), agresszív volumen tetőzés.
 - Mintakeresés: rendezett részsorozatok gyakorisága; véletlen szint permutációs próbával (sima: fordulón belüli
   keverés; szigorú: keverés csak a High előtti és utáni részen belül), 99%-os küszöb. Rangsor: gyakoriság, holtversenynél
   a lefutás elején teljesülő. Párok -> hármasok -> négyesek csak átment mintákból. 2024-en keresés, 2025-ön ellenőrzés,
   utána gazdasági próba mindkét keverés mintáira (a teljes seanszokon is, a téves jelek miatt).
-- 1. lépés kész (`research/pivot_windows.py`, ResearchData `results/pivots/`): 2024-2025-ben 5203 vizsgálható forduló
-  (éjszaka 3397, RTH 1806); 1202 kiesik, mert a láb rövidebb 2 x ATR1-nél (nincs kezdet vagy vég). Medián ablak:
-  3-4 perc a High előtt, 5-6 perc utána. A 20 tick feltétel éjszaka ATR1-ben nagy (ATR1 medián 1,16 pont, 20 tick
-  kb. 4 ATR1): k medián éjszaka 7,2, RTH 4,5, max 56 (08:30-as hírtüskék, egyperces ablak). Nyitott döntés: N
-  (javaslat: N x ATR1, de legalább egy fix pontérték, pl. N = 8 és legalább 15 pont).
+- Könyvsáv (2026-10-08 döntés): belépő gyertya nyitó ± (High - belépő nyitó + 20 tick), esetenként, közös N nincs.
+  Élőben ugyanez a jelölt csúcsból: egy gyertya, amelyet alacsonyabb High-ú követ (egyenlő High-nál az első
+  szigorúan alacsonyabbig várunk, a csúcs az első gyertya). A sávos görbéket élőben visszamenőleg kell számolni.
+- Kizárva: a High gyertyája a belépő gyertya (nincs egész perc a High előtt), és az UTC napon átnyúló ablak.
+- 1. lépés kész (`research/pivot_windows.py`, ResearchData `results/pivots/`): 2024-2025-ben **4668 vizsgált
+  ablak** (éjszaka 2978, RTH 1690). A láb rövidebb 2 x ATR1-nél (nincs kezdet vagy vég) 1202 esetben, a High előtt 0
+  perc 516, UTC napon átnyúló 19. Medián ablak 4-5 perc a High előtt, 5-6 perc utána. Sávfél medián 39 tick
+  (éjszaka 33, RTH 52), q99 130.
+- 2. lépés: `DatabentoExtract pivots` (C#, `PivotFlow.cs`, teszt `tests/make_pivot_test.py`) a
+  `results/pivots/pivot_events.csv`-ből másodpercenkénti nyers számlálókat ír (`pivots/<name>.csv.gz`, oszlopok a
+  README-ben). A felhasználónak kell lefuttatnia a nyers fájlokon és feltöltenie.
 
 ## Nyitott kérdések, következő lépések
 

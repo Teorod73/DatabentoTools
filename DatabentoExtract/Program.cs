@@ -12,6 +12,9 @@ const string Usage = """
       DatabentoExtract book <inputDir|file> <events.csv> <outDir> [--parallel n] [--force]
           Order book and trade flow features around the zone touches of the events file
           (research/export_book_events.py), written to book/<name>.csv per input file.
+      DatabentoExtract pivots <inputDir|file> <pivot_events.csv> <outDir> [--parallel n] [--force]
+          Order flow per second in the windows around the ZigZag swings (research/pivot_windows.py),
+          written to pivots/<name>.csv.gz per input file.
 
     Options:
       --source trades|fills   volume per price from the trades (default) or from the fills
@@ -25,7 +28,8 @@ const string Usage = """
       instruments/<name>.csv     every instrument of the file with its symbol and record statistics
     """;
 
-if (args.Length < 3 || args[0] is not ("diag" or "extract" or "book") || (args[0] == "book" && args.Length < 4))
+var withEvents = args.Length > 0 && args[0] is "book" or "pivots";
+if (args.Length < 3 || args[0] is not ("diag" or "extract" or "book" or "pivots") || (withEvents && args.Length < 4))
 {
     Console.WriteLine(Usage);
     return 1;
@@ -33,15 +37,15 @@ if (args.Length < 3 || args[0] is not ("diag" or "extract" or "book") || (args[0
 
 var mode = args[0];
 var input = args[1];
-var eventsPath = mode == "book" ? args[2] : "";
-var outDirectory = mode == "book" ? args[3] : args[2];
+var eventsPath = withEvents ? args[2] : "";
+var outDirectory = withEvents ? args[3] : args[2];
 
 var source = VolumeSource.Trades;
 var minShare = 0.01;
 var parallel = 2;
 var force = false;
 
-for (var i = mode == "book" ? 4 : 3; i < args.Length; i++)
+for (var i = withEvents ? 4 : 3; i < args.Length; i++)
 {
     switch (args[i])
     {
@@ -87,9 +91,13 @@ var files = Directory.Exists(input)
     : [input];
 
 var events = mode == "book" ? BookFeatureCollector.ReadEvents(eventsPath) : [];
-Console.WriteLine(mode == "book"
-    ? $"{files.Count} files, {events.Count} events, parallel: {parallel}"
-    : $"{files.Count} files, source: {source}, parallel: {parallel}");
+var windows = mode == "pivots" ? PivotFlowCollector.ReadWindows(eventsPath) : [];
+Console.WriteLine(mode switch
+{
+    "book" => $"{files.Count} files, {events.Count} events, parallel: {parallel}",
+    "pivots" => $"{files.Count} files, {windows.Count} windows, parallel: {parallel}",
+    _ => $"{files.Count} files, source: {source}, parallel: {parallel}",
+});
 
 var stopwatch = Stopwatch.StartNew();
 var failed = 0;
@@ -100,6 +108,8 @@ Parallel.ForEach(files, new ParallelOptions { MaxDegreeOfParallelism = parallel 
     {
         if (mode == "book")
             BookProcessor.Process(file, outDirectory, events, force, consoleSync);
+        else if (mode == "pivots")
+            PivotProcessor.Process(file, outDirectory, windows, force, consoleSync);
         else
             FileProcessor.Process(file, outDirectory, options, force, consoleSync);
     }

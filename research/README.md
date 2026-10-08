@@ -34,8 +34,9 @@ HVN min asymmetry 0.8, max overshoot 0.25, forgalommal súlyozva, a besorolás a
 - `position_study.py <resultsDir>`: a rögzített szabály egyszerre egy pozícióval (seanszonként a belépés
   sorrendjében, nyitott pozíció alatt a jel kimarad), 2024-2026, valódi és eltolt zónák külön számlán.
 - `pivot_windows.py <resultsDir> <extractDir> <outDir> [atrMultiple] [lastSession]`: az orderflow-sorrend vizsgálat
-  első lépése. A ZigZag (TimeOfDay, 0,3 és 0,5) fordulói köré ablak: szint = High - N x ATR1 (ATR(20) 1 perces, a
-  forduló előtti gyertyán), T0 = a szint alatti utolsó gyertya zárása, Tend = a forduló utáni első szint alatti gyertya
-  zárása (legkésőbb a következő fordulóig), Tx = a High első másodperce. Kimenet: `windows.csv` és `summary.md`
-  (esetszámok éjszaka / RTH bontásban, ablakhosszak, a könyvsáv szorzójához a k = (High - belépő nyitó + 20 tick) /
-  ATR1 eloszlása). Csak a fejlesztési időszak (2025-12-31-ig).
+  ablakai. A ZigZag (TimeOfDay, 0,3 és 0,5) fordulói köré: szint = High - N x ATR1 (ATR(20) 1 perces, a forduló
+  előtti gyertyán), T0 = a szint alatti utolsó gyertya zárása, Tend = a forduló utáni első szint alatti gyertya
+  zárása (legkésőbb a következő fordulóig), Tx = a High első másodperce. Könyvsáv: belépő nyitó ± (High - belépő
+  nyitó + 20 tick). Kizárva: nincs kezdet vagy vég, 16:00-20:00, a High gyertyája a belépő gyertya, UTC napon
+  átnyúló ablak. Kimenet: `windows.csv`, `pivot_events.csv` (a DatabentoExtract `pivots` bemenete, 30 s-mal T0
+  előttről) és `summary.md`. Csak a fejlesztési időszak (2025-12-31-ig).
