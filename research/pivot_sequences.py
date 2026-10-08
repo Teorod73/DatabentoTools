@@ -1,6 +1,10 @@
 """Event catalog of the order flow curves and the event sequence of every swing window (step 4).
 
-    python pivot_sequences.py <pivotsDir> <flowDir> <outDir>
+    python pivot_sequences.py <pivotsDir> <flowDir> <outDir> [seriesDir]
+
+pivotsDir is results/pivots (its parent has sessions.csv); with seriesDir (the series/ output of DatabentoExtract
+pivots) the large series threshold is relative to the previous days (pivot_curves.large_limits), without it the
+fixed 60 / 20.
 
 Curves of pivot_curves.py (mirrored to the swing side, the high and the low together), per part of day. The
 thresholds of a window come from the windows of the previous 60 calendar days of the same part of day (rolling, so a
@@ -195,8 +199,9 @@ def window_events(c: pd.DataFrame, mid: np.ndarray, th: pd.DataFrame) -> dict[st
     return ev
 
 
-def main(pivots: str, flow: str, out_dir: str) -> None:
-    windows, df = pc.load(pivots, flow, [2024, 2025])
+def main(pivots: str, flow: str, out_dir: str, series: str | None = None) -> None:
+    limits = pc.large_limits(os.path.dirname(os.path.abspath(pivots)), series) if series else None
+    windows, df = pc.load(pivots, flow, [2024, 2025], limits)
     m = pc.mirrored(df, windows).sort_values(["window_id", "second"]).reset_index(drop=True)
     search = (pd.to_datetime(m.window_id.map(windows.session)).dt.year == SEARCH_YEAR).to_numpy()
     cur = pc.curves(m, windows, search)
@@ -229,6 +234,8 @@ def main(pivots: str, flow: str, out_dir: str) -> None:
 
     os.makedirs(out_dir, exist_ok=True)
     th.to_csv(os.path.join(out_dir, "thresholds.csv"), index=False)
+    if limits is not None:
+        limits.to_csv(os.path.join(out_dir, "large_limits.csv"), index=False)
     events.to_csv(os.path.join(out_dir, "events.csv.gz"), index=False)
     with open(os.path.join(out_dir, "catalog.md"), "w", encoding="utf-8") as f:
         f.write(catalog(events, windows.loc[studied]))
@@ -259,4 +266,4 @@ def catalog(events: pd.DataFrame, windows: pd.DataFrame) -> str:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2], sys.argv[3])
+    main(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] if len(sys.argv) > 4 else None)

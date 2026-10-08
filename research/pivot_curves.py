@@ -1,6 +1,6 @@
 """Order flow curves of the ZigZag swing windows and their average shape in normalized time (step 3).
 
-    python pivot_curves.py <pivotsDir> <flowDir> <outDir> [year]
+    python pivot_curves.py <pivotsDir> <flowDir> <outDir> [year] [seriesDir]
 
 pivotsDir: windows.csv of pivot_windows.py, flowDir: the pivots/<name>.csv.gz files of DatabentoExtract pivots.
 Only the valid windows of the year (default 2024, the search year) are used; 2025 stays for the check.
@@ -20,7 +20,8 @@ crossed book have no curve values.
     att_eff        attacker efficiency: mid move in the attack direction over the last N attacker contracts,
                    in ATR1 (N = median attacker volume of 30 s in the part of day, from the year's windows)
     def_eff        the same for the defenders (mid move against the attack over the last N defender contracts)
-    att_large      large attacker series (60 RTH / 20 night) / attacker aggressor volume                    0..1
+    att_large      large attacker series / attacker aggressor volume (threshold per session relative to the
+                   previous 60 days, large_limits(); without the series data the fixed 60 RTH / 20 night)   0..1
     def_large      the same for the defenders                                                                0..1
     balance        resting size per price level inside the band, (defending - attacking) / (sum)           -1..1
                    (defending levels: from its best price to the band edge, the same for the attacking side;
@@ -69,16 +70,86 @@ TITLES = {
 TICK = 0.25
 
 
-def load(pivots: str, flow: str, years) -> tuple[pd.DataFrame, pd.DataFrame]:
+LARGE_LIMITS = [5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 60, 80, 100, 125, 150, 200, 250, 300, 400]
+CALIBRATION_FROM = "2025-11-01"     # the last 60 days of the development period
+TRAILING_DAYS, MIN_SESSIONS = 60, 20
+
+
+def part_of_half_hour(et: pd.Series) -> pd.Series:
+    minutes = et.dt.hour * 60 + et.dt.minute
+    return pd.Series(np.where((minutes >= 9 * 60 + 30) & (minutes < 16 * 60), "rth",
+                              np.where((minutes >= 20 * 60) | (minutes < 9 * 60 + 30), "night", "none")), index=et.index)
+
+
+def large_limits(results: str, series_dir: str) -> pd.DataFrame:
+    """The large series threshold of every session and part of day, relative to the previous days.
+
+    The aggressor series of the front contract (DatabentoExtract pivots, series/) give per session and part of day
+    the volume by series size. p = the share of the aggressor volume in series of at least LARGE (60 RTH, 20 night)
+    over the sessions from CALIBRATION_FROM to the end of 2025 (the user set 60 / 20 for the present market). The
+    threshold of a session is the smallest size whose share over the previous TRAILING_DAYS days is at most p,
+    rounded (in log) to the nearest of LARGE_LIMITS. Fewer than MIN_SESSIONS earlier sessions: no threshold."""
+    sessions = pd.read_csv(os.path.join(results, "sessions.csv"), parse_dates=["session"])
+    front = dict(zip(sessions.session.dt.date, sessions.instrument_id))
+    parts = []
+    for path in sorted(glob.glob(os.path.join(series_dir, "*.csv.gz"))):
+        df = pd.read_csv(path)
+        et = pd.to_datetime(df.utc_half_hour, unit="s", utc=True).dt.tz_convert("America/New_York")
+        df["session"] = (et + pd.Timedelta(hours=6)).dt.date
+        df["part"] = part_of_half_hour(et)
+        df = df[(df.part != "none") & (df.instrument_id == df.session.map(front))]
+        parts.append(df.groupby(["session", "part", "size"]).volume.sum())
+    volume = pd.concat(parts).groupby(level=[0, 1, 2]).sum().unstack(fill_value=0)
+    volume = volume.reindex(columns=range(1, 401), fill_value=0)
+
+    def share_at_least(v: np.ndarray) -> np.ndarray:
+        tail = np.cumsum(v[::-1])[::-1]          # volume of the series of at least each size
+        return tail / tail[0]
+
+    limits = {"rth": 60, "night": 20}
+    rows = []
+    for part in ("night", "rth"):
+        v = volume.xs(part, level=1)
+        dates = pd.to_datetime(pd.Series(v.index))
+        calibration = v[(dates >= CALIBRATION_FROM).to_numpy() & (dates.dt.year == 2025).to_numpy()].sum().to_numpy()
+        p = share_at_least(calibration)[limits[part] - 1]
+        for i, d in enumerate(dates):
+            prior = ((dates >= d - pd.Timedelta(days=TRAILING_DAYS)) & (dates < d)).to_numpy()
+            if prior.sum() < MIN_SESSIONS:
+                continue
+            share = share_at_least(v[prior].sum().to_numpy())
+            size = int(np.argmax(share <= p)) + 1
+            limit = min(LARGE_LIMITS, key=lambda x: abs(np.log(x) - np.log(size)))
+            rows.append({"session": d.date(), "part": part, "share_p": p, "size": size, "large_limit": limit})
+    return pd.DataFrame(rows)
+
+
+def load(pivots: str, flow: str, years, limits: pd.DataFrame | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """limits: large_limits(); then large_buy / large_sell are the volumes of the series above the threshold of the
+    window's session and part of day (NaN without a threshold), otherwise the fixed 60 (RTH) / 20 (night)."""
     years = [years] if isinstance(years, int) else list(years)
     windows = pd.read_csv(os.path.join(pivots, "windows.csv"))
     windows = windows[windows.valid & pd.to_datetime(windows.session).dt.year.isin(years)].set_index("window_id")
+    if limits is not None:
+        key = limits.set_index([limits.session.astype(str), "part"]).large_limit
+        windows["large_limit"] = [key.get((s, p), np.nan) for s, p in zip(windows.session.astype(str), windows.part)]
+    else:
+        windows["large_limit"] = np.where(windows.part == "rth", 60, 20)
     rows = []
     for path in sorted(glob.glob(os.path.join(flow, "*.csv.gz"))):
         df = pd.read_csv(path)
         df = df[df.window_id.isin(windows.index)]
-        if len(df):
-            rows.append(df)
+        if not len(df):
+            continue
+        limit = df.window_id.map(windows.large_limit).to_numpy()
+        for side in ("buy", "sell"):
+            picked = np.full(len(df), np.nan)
+            for value in LARGE_LIMITS:
+                column = f"large_{side}_{value}"
+                if column in df:
+                    picked = np.where(limit == value, df[column].to_numpy(float), picked)
+            df[f"large_{side}"] = picked
+        rows.append(df.drop(columns=[c for c in df.columns if c.startswith("large_") and c[-1].isdigit()]))
     return windows, pd.concat(rows, ignore_index=True)
 
 
@@ -94,9 +165,8 @@ def mirrored(df: pd.DataFrame, windows: pd.DataFrame) -> pd.DataFrame:
     for side, (ask_side, bid_side) in {"def": ("ask", "bid"), "att": ("bid", "ask")}.items():
         for c in ("add_w1", "cancel_w1", "rest", "refill", "hidden"):
             out[f"{side}_{c}"] = pick(f"{ask_side}_{c}", f"{bid_side}_{c}")
-    for limit in (20, 60):
-        out[f"att_large_{limit}"] = pick(f"large_buy_{limit}", f"large_sell_{limit}")
-        out[f"def_large_{limit}"] = pick(f"large_sell_{limit}", f"large_buy_{limit}")
+    out["att_large"] = pick("large_buy", "large_sell")
+    out["def_large"] = pick("large_sell", "large_buy")
     bid = pd.to_numeric(df.bid, errors="coerce").to_numpy(float)
     ask = pd.to_numeric(df.ask, errors="coerce").to_numpy(float)
     mid = np.where(df.crossed.to_numpy() == 1, np.nan, (bid + ask) / 2)
@@ -158,7 +228,7 @@ def curves(m: pd.DataFrame, windows: pd.DataFrame, base: np.ndarray | None = Non
     vol30 = roll30("att_vol") + roll30("def_vol")
     n_total = vol30[base].groupby(w[base]).median()
     columns = ["att_vol", "def_vol", "def_cancel_w1", "def_add_w1", "att_cancel_w1", "att_add_w1", "def_refill",
-               "att_refill", "def_hidden", "att_large_20", "att_large_60", "def_large_20", "def_large_60"]
+               "att_refill", "def_hidden", "att_large", "def_large"]
     sums = volume_window_sums(m, columns, n_total, w)
     roll = lambda c: sums[c]
     att, dfn = roll("att_vol"), roll("def_vol")
@@ -174,10 +244,8 @@ def curves(m: pd.DataFrame, windows: pd.DataFrame, base: np.ndarray | None = Non
     out["def_refill"] = ratio(roll("def_refill"), att)
     out["att_refill"] = ratio(roll("att_refill"), dfn)
     out["def_hidden"] = ratio(roll("def_hidden"), att)
-    large_att = np.where(w == "rth", roll("att_large_60"), roll("att_large_20"))
-    large_def = np.where(w == "rth", roll("def_large_60"), roll("def_large_20"))
-    out["att_large"] = ratio(pd.Series(large_att), att)
-    out["def_large"] = ratio(pd.Series(large_def), dfn)
+    out["att_large"] = ratio(roll("att_large"), att)
+    out["def_large"] = ratio(roll("def_large"), dfn)
     rest_d, rest_a = m.def_rest / m.def_levels, m.att_rest / m.att_levels
     out["balance"] = ratio(rest_d - rest_a, rest_d + rest_a)
     typical = w.map(n_total)
@@ -264,8 +332,9 @@ def plot(sh: pd.DataFrame, curve: str, path: str) -> None:
     plt.close(fig)
 
 
-def main(pivots: str, flow: str, out_dir: str, year: int = 2024) -> None:
-    windows, df = load(pivots, flow, year)
+def main(pivots: str, flow: str, out_dir: str, year: int = 2024, series: str | None = None) -> None:
+    limits = large_limits(os.path.dirname(os.path.abspath(pivots)), series) if series else None
+    windows, df = load(pivots, flow, year, limits)
     c = curves(mirrored(df, windows), windows)
     per = binned(c, windows)
     sh = shape(per)
@@ -285,4 +354,5 @@ def main(pivots: str, flow: str, out_dir: str, year: int = 2024) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4]) if len(sys.argv) > 4 else 2024)
+    main(sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4]) if len(sys.argv) > 4 else 2024,
+         sys.argv[5] if len(sys.argv) > 5 else None)

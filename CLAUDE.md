@@ -159,6 +159,11 @@ sorrend, és hogy minden esemény az ablakon belül történjen.
   küszöb az a méret, amely fölött az előző 60 nap front kontraktusának agresszív volumenéből ugyanakkora rész esik,
   mint 2025 utolsó 60 napján a 60-as (RTH) / 20-as (éjszaka) küszöb fölött (a felhasználó a 60/20-at a mostani piachoz
   állította be). A felhasználónak újra kell futtatnia a `pivots`-ot (`--force`).
+- Relatív nagy-küszöb kész (`pivot_curves.large_limits`, `sequences/large_limits.csv`): a 60/20 fölötti volumen
+  része 2025 végén RTH 9,0%, éjszaka 19,2%; ugyanez a rész az előző 60 napon adja a napi küszöböt. Medián küszöb
+  negyedévenként: éjszaka 40 (2024 Q1) → 25 (2025), RTH 100 → 60-80. Esemény-gyakoriság eltérése 2024 és 2025 között
+  medián 2,1 pont, 2 esemény > 10 pont (cross_large, div_att_large éjszaka, +11). A `*_large_lo` szinte mindig
+  megtörténik (a sok nulla miatt), önmagában nem informatív. **A 4. lépés kész, jöhet az 5. (mintakeresés).**
 
 ## Nyitott kérdések, következő lépések
 
