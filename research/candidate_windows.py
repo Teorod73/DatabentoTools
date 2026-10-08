@@ -15,7 +15,10 @@ Excluded as in pivot_windows.py: no whole minute before the candidate, 16:00-20:
 17:00-18:00 break.
 
 There are about 20 times more candidates than swings; the order flow data for all of them would be too large, so a
-seeded uniform sample (default 10%) of the valid candidates goes to candidate_events.csv for DatabentoExtract pivots.
+seeded uniform sample (default 10%) of the valid candidates that are not ZigZag swings goes to candidate_events.csv
+for DatabentoExtract pivots; the swing candidates have the same windows as pivot_windows.py, their order flow is
+already in the pivots run (later a full run of all candidates is planned).
+confirm_minute: the close of the first lower bar after the candidate (live the candidate exists from then on).
 Outputs: candidates.csv (all, with the sample flag), candidate_events.csv, summary.md.
 """
 from __future__ import annotations
@@ -75,6 +78,7 @@ def candidates(bars: pd.DataFrame, multiple: float = 2.0) -> pd.DataFrame:
                 "type": kind, "price": price, "atr1": atr1[i - 1], "entry_minute": int(minute[entry]),
                 "swing_minute": int(minute[i]),
                 "end_minute": int(minute[e]) + (60 if resolved else 0),
+                "confirm_minute": int(minute[j]) + 60,
                 "resolved": resolved, "pivot": (i, kind) in swing_keys,
                 "bars_before": i - entry, "bars_after": e - i,
                 "part": pw.part_of_day(int(bars.minute_of_day[i])),
@@ -94,7 +98,7 @@ def main(results: str, out: str, sample: float = 0.1, last_session: str = "2025-
     df["crosses_break"] = session_of(et(start)) != session_of(et(df.end_minute - 1))
     df["valid"] = (df.part != "none") & ~df.crosses_day & ~df.crosses_break & (df.end_minute > df.entry_minute)
     rng = np.random.default_rng(SEED)
-    df["sample"] = df.valid & (rng.random(len(df)) < sample)
+    df["sample"] = df.valid & ~df["pivot"] & (rng.random(len(df)) < sample)
     df = df.sort_values(["entry_minute", "swing_minute", "window_id"]).reset_index(drop=True)
 
     os.makedirs(out, exist_ok=True)
@@ -106,7 +110,7 @@ def main(results: str, out: str, sample: float = 0.1, last_session: str = "2025-
 
     v = df[df.valid]
     lines = [f"# Jelölt csúcsok és aljak (2 x ATR1, {last_session}-ig)", "",
-             f"Összes jelölt: {len(df)}, érvényes: {len(v)}, minta ({sample:.0%}): {len(s)}, "
+             f"Összes jelölt: {len(df)}, érvényes: {len(v)}, minta (a nem ZigZag-jelöltek {sample:.0%}-a): {len(s)}, "
              f"a minta másodpercei: {int((s.end_minute - s.entry_minute + pw.WARM_UP).sum())}.", "",
              "| rész | érvényes | ebből ZigZag-forduló | lezárult (szint alá ment) | érvénytelenült (új szélsőérték) | minta |",
              "|---|---|---|---|---|---|"]

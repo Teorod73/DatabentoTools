@@ -61,7 +61,8 @@ HVN min asymmetry 0.8, max overshoot 0.25, forgalommal súlyozva, a besorolás a
 - `candidate_windows.py <resultsDir> <outDir> [sample] [lastSession]`: a gazdasági próba jelöltjei, ahogy élőben
   látszanak: minden gyertya, amelyet alacsonyabb High-ú követ (Low tükrözve), és a belépő gyertya óta a legmagasabb;
   ablak és sáv mint a fordulóknál, a vége az első szint alatti gyertya vagy az első magasabb gyertya (ott
-  érvénytelenül). `pivot` = ugyanazon a gyertyán ZigZag-forduló. A C# adathoz 10%-os véletlen minta
-  (`candidate_events.csv`). Kimenet: `candidates.csv`, `candidate_events.csv`, `summary.md`. A próbába kerülő minták
+  érvénytelenül). `pivot` = ugyanazon a gyertyán ZigZag-forduló. A C# adathoz a nem ZigZag-jelöltek 10%-os
+  véletlen mintája (`candidate_events.csv`); a ZigZag-jelöltek ablaka azonos a fordulóablakkal, az adatuk a `pivots`
+  futásból jön. `confirm_minute`: az első alacsonyabb gyertya zárása (élőben innen létezik a jelölt). Kimenet: `candidates.csv`, `candidate_events.csv`, `summary.md`. A próbába kerülő minták
   (`selected_patterns.csv`): ülésszakonként, hosszonként (3, 4) és családonként (minden / csak könyv-orderflow) a
   2024-ben átment 10 leggyakoribb, csak a 2024-es adatból választva.

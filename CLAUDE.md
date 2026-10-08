@@ -180,7 +180,9 @@ sorrend, és hogy minden esemény az ablakon belül történjen.
   jelölt = gyertya, amelyet alacsonyabb High-ú követ és a belépő óta a legmagasabb (Low tükrözve), ablak a
   fordulókéval azonos, vége az első szint alatti vagy az első magasabb gyertya. 2024-2025: 84 923 érvényes jelölt
   (éjszaka 58 030, ebből 5,5% forduló; RTH 26 893, 6,6%); a fordulóablakok 4623 / 4667-e jelöltként is megvan,
-  azonos ablakkal. C# adat a 10%-os mintára (8438 jelölt, 6,9 M másodperc). Kiválasztott minták
+  azonos ablakkal. Gyors teszt (felhasználói döntés): a ZigZag-jelöltek mind (adatuk a `pivots` futásból) és a nem
+  ZigZag-jelöltek 10%-a (7905 jelölt, 6,4 M másodperc, súly 10); később teljes teszt minden jelöltre. A nem
+  ZigZag-jelölten teljesülő minta önmagában nem cáfolja a mintát, a gazdasági próba (nettó R) dönt. Kiválasztott minták
   (`selected_patterns.csv`, csak 2024-ből): 70. A felhasználónak le kell futtatnia a `pivots`-ot a
   `candidate_events.csv`-re.
 
