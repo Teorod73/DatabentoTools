@@ -192,6 +192,16 @@ sorrend, és hogy minden esemény az ablakon belül történjen.
   stopnál 1 tick csúszás, 0,08 pont jutalék. Mellette MAE / MFE (R-ben és ATR1-ben), precizitás (tájékoztató),
   összevetés minden jelölttel minta nélkül. Mintánként, éjszaka / RTH, 2024 / 2025 külön (2025 az ellenőrzés), a nem
   ZigZag-jelöltek 10-es súllyal.
+- **6. lépés eredménye (gyors teszt, `research/pattern_trades.py`, ResearchData `results/candidates/trades/`):**
+  alap (minden jelölt a megerősítéskor, minta nélkül): éjszaka 2024 −0,03 / −0,16 / −0,12 R (1R / 2R / 3R cél), 2025
+  −0,04 / −0,11 / −0,08; RTH 2024 +0,14 ±0,07 / +0,12 / +0,14, 2025 +0,04 ±0,07 / +0,02 / +0,05. A minták RTH-ban
+  megduplázzák a pontosságot (ZigZag-forduló a kötések között 7,5% → 13-17%, és ez 2025-ben is megmarad: 10-15%),
+  2024-ben +0,2…+0,37 R (1R), de **2025-ben szinte mind 0 körül vagy negatív**: egyik RTH minta sem megy át az
+  ellenőrzésen. Éjszaka a minták 0 körül; néhány csak könyv/orderflow négyes 2025-ben +0,26…+0,34 R, de 2024-ben 0
+  körül, kb. 100 kötéssel és ±0,25-0,5 sávval (70 minta x 3 cél: a véletlen is ad ilyet). Az ár-követő (hatékonyság,
+  rejtett) éjszakai minták pontossága az alap alatt van. Összegzés: a sorrendminták a fordulók felé dúsítanak, de ez
+  ezzel a belépés / stop / cél mechanikával nem ad igazolt nettó előnyt. A teljes teszt (minden jelölt) csak akkor
+  érdemes, ha új ötlet ad rá okot.
 
 ## Nyitott kérdések, következő lépések
 
