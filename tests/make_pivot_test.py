@@ -5,7 +5,8 @@ C# PivotFlowCollector.
 
 Life cycle as on GLBX.MDP3 (see make_book_test.py), events of several records share a timestamp and the last record
 of an event has the last flag. Trade bursts of one side within a few ms make the large aggressor series, some trades
-have no side. Each window is replayed separately with a plain book (best price by min / max of the levels).
+have no side, some trades are larger than the visible resting size (native iceberg or implied volume: the extra has
+no fill record). Each window is replayed separately with a plain book (best price by min / max of the levels).
 """
 import datetime
 import decimal
@@ -68,7 +69,8 @@ for iid in (1001, 1002):
 
 
 def trade(iid, aggressor, want, recs):
-    """One aggressor order: T per level, F per resting order, then C or M per order."""
+    """One aggressor order: T per level, F per resting order, then C or M per order. Sometimes the first level
+    trades more than its visible size (hidden volume without fill records)."""
     book = orders[iid]
     resting = "A" if aggressor == "B" else "B"
     levels = sorted({o[1] for o in book.values() if o[0] == resting}, reverse=(resting == "B"))
@@ -84,7 +86,8 @@ def trade(iid, aggressor, want, recs):
             want -= q
         if not taken:
             continue
-        recs.append(("T", aggressor, level, sum(q for _, q in taken), 0, 0))
+        hidden = random.randint(1, 25) if random.random() < 0.15 else 0
+        recs.append(("T", aggressor, level, sum(q for _, q in taken) + hidden, 0, 0))
         for oid, q in taken:
             recs.append(("F", resting, level, q, oid, 0))
         for oid, q in taken:
@@ -222,8 +225,9 @@ def replay(w):
     series = None
     pending = False
     last_t = None
-    ep = {"A": {"price": None, "q0": 0, "agg": 0, "closed": 0}, "B": {"price": None, "q0": 0, "agg": 0, "closed": 0}}
-    written = {"A": 0, "B": 0}
+    ep = {s: {"price": None, "q0": 0, "agg": 0, "hid": 0, "closed": 0, "closedv": 0} for s in "AB"}
+    written = {"A": 0, "B": 0, "vA": 0, "vB": 0}
+    event_trades = {}
     acc = {}
 
     def best(side):
@@ -237,7 +241,7 @@ def replay(w):
         acc.update(buy=0, sell=0, trades=0, last=None, high=None, low=None,
                    large_buy=[0, 0], large_sell=[0, 0])
         for s in "AB":
-            acc[s] = dict(add=0, add1=0.0, addl=0.0, cancel=0, cancel1=0.0, cancell=0.0, fill=0, up=0, down=0)
+            acc[s] = dict(add=0, add1=0.0, addl=0.0, cancel=0, cancel1=0.0, cancell=0.0, fill=0, up=0, down=0, hidden=0)
 
     def active():
         return started and cur < w["end"]
@@ -246,9 +250,23 @@ def replay(w):
         e = ep[side]
         return e["closed"] + max(0, e["agg"] - e["q0"])
 
+    def visible_total(side):
+        e = ep[side]
+        return e["closedv"] + max(0, e["agg"] - e["hid"] - e["q0"])
+
     def start_episode(side):
         p = best(side)
-        ep[side].update(price=p, q0=levels[side].get(p, 0) if p is not None else 0, agg=0)
+        ep[side].update(price=p, q0=levels[side].get(p, 0) if p is not None else 0, agg=0, hid=0)
+
+    def end_event():
+        for (side, price), (visible, volume) in event_trades.items():
+            hidden = max(0, volume - visible)
+            if hidden and active():
+                acc[side]["hidden"] += hidden
+                if ep[side]["price"] == price:
+                    ep[side]["hid"] += hidden
+        event_trades.clear()
+        evaluate()
 
     def evaluate():
         if not active():
@@ -260,9 +278,10 @@ def replay(w):
                 continue
             if e["price"] is not None:
                 e["closed"] += max(0, e["agg"] - e["q0"])
+                e["closedv"] += max(0, e["agg"] - e["hid"] - e["q0"])
                 if p is not None:
                     acc[side]["up" if p > e["price"] else "down"] += 1
-            e.update(price=p, q0=levels[side].get(p, 0) if p is not None else 0, agg=0)
+            e.update(price=p, q0=levels[side].get(p, 0) if p is not None else 0, agg=0, hid=0)
 
     def write_row():
         nonlocal cur
@@ -276,11 +295,13 @@ def replay(w):
                     number(x["cancell"]), x["fill"], rest]
         ta, tb = total("A"), total("B")
         row += [ta - written["A"], acc["A"]["up"], acc["A"]["down"], tb - written["B"], acc["B"]["up"], acc["B"]["down"]]
+        va, vb = visible_total("A"), visible_total("B")
+        row += [acc["A"]["hidden"], va - written["vA"], acc["B"]["hidden"], vb - written["vB"]]
         for k in range(2):
             row += [acc["large_buy"][k], acc["large_sell"][k]]
         row.append(1 if b is not None and a is not None and b >= a else 0)
         rows.append(",".join(map(str, row)))
-        written["A"], written["B"] = ta, tb
+        written.update(A=ta, B=tb, vA=va, vB=vb)
         reset_acc()
         cur += 1
 
@@ -334,7 +355,7 @@ def replay(w):
         if iid != w["iid"]:
             continue
         if pending and t != last_t:
-            evaluate()
+            end_event()
             pending = False
         last_t = t
         sec = t // NS
@@ -357,6 +378,10 @@ def replay(w):
                     series = (series[0], series[1], series[2] + size)
                 else:
                     series = (side, t, size)
+                key = ("A" if side == "B" else "B", price)
+                if key not in event_trades:
+                    event_trades[key] = [levels[key[0]].get(price, 0), 0]
+                event_trades[key][1] += size
             if active():
                 acc["trades"] += 1
                 if side == "B": acc["buy"] += size
@@ -413,11 +438,11 @@ def replay(w):
 
         pending = True
         if flags & LAST:
-            evaluate()
+            end_event()
             pending = False
 
     if pending:
-        evaluate()
+        end_event()
     if started:
         while cur < w["end"]:
             write_row()
@@ -427,7 +452,8 @@ def replay(w):
 header = ["window_id", "second", "buy", "sell", "trades", "last", "high", "low", "bid", "ask"]
 for side in ("ask", "bid"):
     header += [f"{side}_{c}" for c in ("add", "add_w1", "add_wl", "cancel", "cancel_w1", "cancel_wl", "fill", "rest")]
-header += ["ask_refill", "ask_ep_up", "ask_ep_down", "bid_refill", "bid_ep_up", "bid_ep_down"]
+header += ["ask_refill", "ask_ep_up", "ask_ep_down", "bid_refill", "bid_ep_up", "bid_ep_down",
+           "ask_hidden", "ask_refill_visible", "bid_hidden", "bid_refill_visible"]
 for limit in LIMITS:
     header += [f"large_buy_{limit}", f"large_sell_{limit}"]
 header.append("crossed")

@@ -32,6 +32,11 @@ public sealed class PivotWindow
 ///                            Q0 = its resting size at the start, A = aggressor volume against it at that price,
 ///                            the counter is the sum of max(0, A - Q0) of the closed episodes plus the open one
 ///   {ask,bid}_ep_up / _down  closed episodes whose best price moved up / down
+///   {ask,bid}_hidden         aggressor volume above the visible resting size: per event and price,
+///                            max(0, aggressor volume - resting size of that side at the price before the first
+///                            trade of the event there); native icebergs and implied liquidity (not in the MBO book)
+///   {ask,bid}_refill_visible the refill without the hidden volume: max(0, A - H - Q0) per episode, H = hidden
+///                            volume of the episode at its price
 ///   large_{buy,sell}_{20,60} volume of the aggressor series of at least 20 / 60 contracts (AgressiveDetector:
 ///                            same side trades within 10 ms of the first trade of the series), in the second the
 ///                            series is closed (by an opposite or unknown side trade or a record of the instrument
@@ -114,14 +119,28 @@ public sealed class PivotFlowCollector
     private sealed class Episode
     {
         public long Price = MboRecord.UndefinedPrice;
-        public long Initial, Aggressor, Closed;
+        public long Initial, Aggressor, Hidden, Closed, ClosedVisible;
         public long Total => Closed + Math.Max(0, Aggressor - Initial);
+        public long VisibleTotal => ClosedVisible + Math.Max(0, Aggressor - Hidden - Initial);
+
+        public void Start(long price, long initial)
+        {
+            Price = price;
+            Initial = initial;
+            Aggressor = Hidden = 0;
+        }
+
+        public void Close()
+        {
+            Closed += Math.Max(0, Aggressor - Initial);
+            ClosedVisible += Math.Max(0, Aggressor - Hidden - Initial);
+        }
     }
 
     // flow of one side in the current second
     private sealed class SideFlow
     {
-        public long Add, Cancel, Fill, EpisodesUp, EpisodesDown;
+        public long Add, Cancel, Fill, EpisodesUp, EpisodesDown, Hidden;
         public double AddW1, AddWl, CancelW1, CancelWl;
     }
 
@@ -131,7 +150,7 @@ public sealed class PivotFlowCollector
         public long Second;                     // the second being collected
         public bool Started;
         public readonly Episode AskEpisode = new(), BidEpisode = new();
-        public long AskRefillWritten, BidRefillWritten;
+        public long AskRefillWritten, BidRefillWritten, AskVisibleWritten, BidVisibleWritten;
         public long Buy, Sell, Trades;
         public long Last = MboRecord.UndefinedPrice, High = long.MinValue, Low = long.MaxValue;
         public readonly SideFlow Ask = new(), Bid = new();
@@ -146,6 +165,8 @@ public sealed class PivotFlowCollector
     private readonly long tick;
     private readonly Dictionary<uint, Book> books = [];
     private readonly Dictionary<uint, Series?> series = [];
+    // trades of the current event per instrument: (resting side, price) -> visible size before, aggressor volume
+    private readonly Dictionary<uint, Dictionary<(char Side, long Price), (long Visible, long Volume)>> eventTrades = [];
     private readonly List<State> states;
     private readonly HashSet<uint> instruments;
     private readonly List<State> active = [];
@@ -162,6 +183,7 @@ public sealed class PivotFlowCollector
         {
             books[id] = new Book();
             series[id] = null;
+            eventTrades[id] = [];
         }
     }
 
@@ -176,7 +198,7 @@ public sealed class PivotFlowCollector
 
         var ts = mbo.Timestamp;
         if (pending && ts != lastTs)
-            EvaluateBests();
+            EndEvent(null);
         lastTs = ts;
 
         Advance(ts);
@@ -210,7 +232,7 @@ public sealed class PivotFlowCollector
 
         pending = true;
         if ((mbo.Flags & MboRecord.FlagLast) != 0)
-            EvaluateBests();
+            EndEvent(mbo.InstrumentId);
 
         if (active.Count > 0)
             active.RemoveAll(s => s.Done);
@@ -220,7 +242,7 @@ public sealed class PivotFlowCollector
     public void Finish()
     {
         if (pending)
-            EvaluateBests();
+            EndEvent(null);
         foreach (var s in active)
             while (s.Second < s.Window.EndSecond)
                 WriteRow(s);
@@ -255,10 +277,35 @@ public sealed class PivotFlowCollector
     private void StartEpisode(State s, char side)
     {
         var book = books[s.Window.InstrumentId];
-        var episode = s.EpisodeOf(side);
-        episode.Price = side == 'B' ? book.BestBid : book.BestAsk;
-        episode.Initial = episode.Price == MboRecord.UndefinedPrice ? 0 : book.Size(side, episode.Price);
-        episode.Aggressor = 0;
+        var price = side == 'B' ? book.BestBid : book.BestAsk;
+        s.EpisodeOf(side).Start(price, price == MboRecord.UndefinedPrice ? 0 : book.Size(side, price));
+    }
+
+    // the end of an event (of one instrument, or of all at a new timestamp): hidden volume, then the best prices
+    private void EndEvent(uint? instrumentId)
+    {
+        foreach (var (id, trades) in eventTrades)
+        {
+            if (trades.Count == 0 || (instrumentId is { } only && only != id))
+                continue;
+            foreach (var ((side, price), (visible, volume)) in trades)
+            {
+                var hidden = Math.Max(0, volume - visible);
+                if (hidden == 0)
+                    continue;
+                foreach (var s in active)
+                {
+                    if (s.Window.InstrumentId != id)
+                        continue;
+                    s.FlowOf(side).Hidden += hidden;
+                    var episode = s.EpisodeOf(side);
+                    if (episode.Price == price)
+                        episode.Hidden += hidden;
+                }
+            }
+            trades.Clear();
+        }
+        EvaluateBests();
     }
 
     private void EvaluateBests()
@@ -275,16 +322,14 @@ public sealed class PivotFlowCollector
                     continue;
                 if (episode.Price != MboRecord.UndefinedPrice)
                 {
-                    episode.Closed += Math.Max(0, episode.Aggressor - episode.Initial);
+                    episode.Close();
                     if (price != MboRecord.UndefinedPrice)
                     {
                         if (price > episode.Price) s.FlowOf(side).EpisodesUp++;
                         else s.FlowOf(side).EpisodesDown++;
                     }
                 }
-                episode.Price = price;
-                episode.Initial = price == MboRecord.UndefinedPrice ? 0 : book.Size(side, price);
-                episode.Aggressor = 0;
+                episode.Start(price, price == MboRecord.UndefinedPrice ? 0 : book.Size(side, price));
             }
         }
     }
@@ -321,6 +366,12 @@ public sealed class PivotFlowCollector
                 same.Volume += size;
             else
                 series[id] = new Series { Side = mbo.Side, First = ts, Volume = size };
+
+            // the visible size is taken before the first trade of the event at the price (the book changes after)
+            var key = (mbo.Side == 'B' ? 'A' : 'B', mbo.Price);
+            var trades = eventTrades[id];
+            var (visible, volume) = trades.TryGetValue(key, out var known) ? known : (books[id].Size(key.Item1, mbo.Price), 0L);
+            trades[key] = (visible, volume + size);
         }
 
         foreach (var s in active)
@@ -449,6 +500,8 @@ public sealed class PivotFlowCollector
         var (bid, ask) = (book.BestBid, book.BestAsk);
         var askRefill = s.AskEpisode.Total;
         var bidRefill = s.BidEpisode.Total;
+        var askVisible = s.AskEpisode.VisibleTotal;
+        var bidVisible = s.BidEpisode.VisibleTotal;
 
         var values = new List<string>
         {
@@ -472,6 +525,8 @@ public sealed class PivotFlowCollector
         {
             (askRefill - s.AskRefillWritten).ToString(), s.Ask.EpisodesUp.ToString(), s.Ask.EpisodesDown.ToString(),
             (bidRefill - s.BidRefillWritten).ToString(), s.Bid.EpisodesUp.ToString(), s.Bid.EpisodesDown.ToString(),
+            s.Ask.Hidden.ToString(), (askVisible - s.AskVisibleWritten).ToString(),
+            s.Bid.Hidden.ToString(), (bidVisible - s.BidVisibleWritten).ToString(),
         });
         for (var k = 0; k < LargeLimits.Length; k++)
             values.AddRange(new[] { s.LargeBuy[k].ToString(), s.LargeSell[k].ToString() });
@@ -481,13 +536,15 @@ public sealed class PivotFlowCollector
         // the next second
         s.AskRefillWritten = askRefill;
         s.BidRefillWritten = bidRefill;
+        s.AskVisibleWritten = askVisible;
+        s.BidVisibleWritten = bidVisible;
         s.Buy = s.Sell = s.Trades = 0;
         s.Last = MboRecord.UndefinedPrice;
         s.High = long.MinValue;
         s.Low = long.MaxValue;
         foreach (var f in new[] { s.Ask, s.Bid })
         {
-            f.Add = f.Cancel = f.Fill = f.EpisodesUp = f.EpisodesDown = 0;
+            f.Add = f.Cancel = f.Fill = f.EpisodesUp = f.EpisodesDown = f.Hidden = 0;
             f.AddW1 = f.AddWl = f.CancelW1 = f.CancelWl = 0;
         }
         Array.Clear(s.LargeBuy);
@@ -505,7 +562,8 @@ public sealed class PivotFlowCollector
         foreach (var side in new[] { "ask", "bid" })
             columns.AddRange(new[] { "add", "add_w1", "add_wl", "cancel", "cancel_w1", "cancel_wl", "fill", "rest" }
                 .Select(c => $"{side}_{c}"));
-        columns.AddRange(new[] { "ask_refill", "ask_ep_up", "ask_ep_down", "bid_refill", "bid_ep_up", "bid_ep_down" });
+        columns.AddRange(new[] { "ask_refill", "ask_ep_up", "ask_ep_down", "bid_refill", "bid_ep_up", "bid_ep_down",
+            "ask_hidden", "ask_refill_visible", "bid_hidden", "bid_refill_visible" });
         foreach (var limit in LargeLimits)
             columns.AddRange(new[] { $"large_buy_{limit}", $"large_sell_{limit}" });
         columns.Add("crossed");

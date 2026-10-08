@@ -120,6 +120,11 @@ sorrend, és hogy minden esemény az ablakon belül történjen.
 - 2. lépés: `DatabentoExtract pivots` (C#, `PivotFlow.cs`, teszt `tests/make_pivot_test.py`) a
   `results/pivots/pivot_events.csv`-ből másodpercenkénti nyers számlálókat ír (`pivots/<name>.csv.gz`, oszlopok a
   README-ben). A felhasználónak kell lefuttatnia a nyers fájlokon és feltöltenie.
+- Refill kettébontva (2026-10-08): `*_hidden` = a látható méret fölötti kötött volumen (natív iceberg + implied, az
+  MBO-ból nem választható szét), `*_refill_visible` = refill a rejtett rész nélkül (szintetikus újratöltés). Előtte
+  egy napon `DatabentoExtract diag` → `<name>_diag_hidden.txt`: hogyan jelenik meg a natív iceberg a Databento
+  MBO-ban (látható méretnél nagyobb fill, méretnövelő M vagy új A). Ennek eredményétől függ, hogy a betett méret
+  (`*_add`) tartalmazza-e az iceberg-újratöltést. A `pivots` futtatás ez után.
 
 ## Nyitott kérdések, következő lépések
 

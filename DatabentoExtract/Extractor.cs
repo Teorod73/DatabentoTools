@@ -56,6 +56,7 @@ public sealed class Extractor(DbnMetadata metadata, ExtractOptions options)
     private long recvOrderViolations;
     private ulong lastTsRecv;
     private readonly TradeGroupStats tradeGroups = new();
+    private readonly HiddenDiagnostics? hidden = options.Diagnostics ? new HiddenDiagnostics() : null;
 
     public long RecordCount { get; private set; }
 
@@ -80,6 +81,7 @@ public sealed class Extractor(DbnMetadata metadata, ExtractOptions options)
                 recvOrderViolations++;
             lastTsRecv = mbo.TsRecv;
             tradeGroups.Add(mbo);
+            hidden?.Process(mbo);
         }
 
         if ((mbo.Flags & MboRecord.FlagSnapshot) != 0)
@@ -271,6 +273,12 @@ public sealed class Extractor(DbnMetadata metadata, ExtractOptions options)
                 writer.WriteLine($"  price levels: {prices.Count}, levels where trade and fill volume differ: {differentPrices}, sum of the differences: {differentVolume}");
             }
         });
+
+        if (main != null && hidden != null)
+        {
+            hidden.Finish();
+            WriteText(Path.Combine(outDirectory, name + "_diag_hidden.txt"), writer => hidden.Write(writer, main.Id));
+        }
 
         if (main != null)
         {
