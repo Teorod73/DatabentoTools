@@ -81,6 +81,7 @@ class Data:
     def __init__(self, ev: pd.DataFrame, events: list[str]):
         self.windows = sorted(ev.window_id.unique())
         self.events = events
+        ev = ev[ev.event.isin(events)]
         col = {e: i for i, e in enumerate(events)}
         row = {w: i for i, w in enumerate(self.windows)}
         shape = (len(self.windows), len(events))
