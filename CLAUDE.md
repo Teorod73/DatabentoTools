@@ -164,6 +164,18 @@ sorrend, és hogy minden esemény az ablakon belül történjen.
   negyedévenként: éjszaka 40 (2024 Q1) → 25 (2025), RTH 100 → 60-80. Esemény-gyakoriság eltérése 2024 és 2025 között
   medián 2,1 pont, 2 esemény > 10 pont (cross_large, div_att_large éjszaka, +11). A `*_large_lo` szinte mindig
   megtörténik (a sok nulla miatt), önmagában nem informatív. **A 4. lépés kész, jöhet az 5. (mintakeresés).**
+- 5. lépés (`research/pivot_patterns.py`, ResearchData `results/pivots/patterns/`, 1000 keverés): az első
+  próbában a sima és a szigorú keverésen szinte minden minta átment, mert az események tipikus időzítése (korai /
+  késői) és az azonos görbéből vett események (emelkedés → esés → tetőzés) mechanikusan rendezettek. Ezért a döntő
+  szint az „időzítés” keverés (minden esemény megtartja saját időzítését és gyakoriságát, csak az ablakok
+  keverednek, hasonló eseményszámúak között), azonos görbéből két esemény nem lehet egy mintában, és a mindkét
+  évben ≥ 90%-os események kimaradnak. Eredmény: sok minta átmegy 2024-ben és 2025-ben is (éjszaka 384 pár, RTH 201),
+  de a gyakori párok (50-65%) a vártnál csak 1,1-1,3-szor gyakoribbak; a négyesek 3-4,5-szörösek, viszont csak az
+  ablakok 9-16%-ában. RTH legerősebb (csak könyv/orderflow): cancel-esés → nagy támadók tetőzése → volumen-tetőzés,
+  a csúcs előtt (u ≈ -0,3): climax / exhaustion kép. Éjszaka: nagy támadók nőnek → védő cancel csökken → támadó
+  cancel nő → nagy védők csökkennek, a csúcs körül (u ≈ 0,05). Nincs minta, amely a fordulók nagy részét lefedné.
+  Fontos korlát: az átmenés csak azt mutatja, hogy a fordulókon az események együtt járnak; azt nem, hogy nem
+  fordulón ritkábbak. Ehhez a gazdasági próbához nem forduló jelölt-csúcsokon is kell C# adat.
 
 ## Nyitott kérdések, következő lépések
 
