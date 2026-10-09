@@ -62,7 +62,7 @@ TITLES = {
     "def_eff": "Védő hatékonyság (ATR1 / N kontraktus)",
     "att_large": "Nagy támadók aránya",
     "def_large": "Nagy védők aránya",
-    "balance": "Könyv balansz szintenként (védő - támadó) / összes",
+    "balance": "Könyv balansz azonos szintszámon (védő - támadó) / összes",
     "volume": "Agresszív volumen / szokásos",
 }
 

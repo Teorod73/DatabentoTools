@@ -144,6 +144,11 @@ sorrend, és hogy minden esemény az ablakon belül történjen.
   sűrűség nélkül. C#: új `bid_rest_top`, `ask_rest_bottom` oszlopok (teszt bájtra egyezik). A felhasználónak újra kell
   futtatnia a `pivots`-ot (`--force`) a `pivot_events.csv`-re és a `candidate_events.csv`-re; utána a 4-6. lépés
   balansz-eseményei újraszámolandók.
+- Új balansz futtatva (2026-10-09, a többi oszlop bájtra azonos a régi futással), 3. lépés újraszámolva: az RTH-s
+  púp (a geometria) eltűnt, a görbe közel lapos, medián 0 és +0,05 között (High kb. 0,03-mal a tükrözött Low fölött).
+  Kis kiugrás közvetlenül a csúcson (RTH Low 0,0 → 0,03), utána gyors visszaesés; ez részben még mechanikus lehet
+  (gyors mozgás után a támadó oldal könyve a legjobb ár mögött még nem töltődött vissza). A 4-6. lépés még a régi
+  balansszal.
 - 4. lépés (`research/pivot_sequences.py`, ResearchData `results/pivots/sequences/`): 64 eseménytípus. Az első,
   laza definícióval (q20/q80, 5 s) szinte minden esemény az ablakok 90-100%-ában és rögtön T0 után történt, ezért
   szigorítva: q95/q5, 15 s, CUSUM H = 10 (csak az esemény-gyakoriságok alapján, eredményre nem hangolva). Medián 37
