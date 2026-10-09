@@ -307,6 +307,17 @@ def replay(w):
             rest = sum(sz for p, sz in levels[side].items() if lo_band - 1e-9 <= p <= hi_band + 1e-9)
             row += [x["add"], number(x["add1"]), number(x["addl"]), x["cancel"], number(x["cancel1"]),
                     number(x["cancell"]), x["fill"], x["reload"], rest]
+
+        # the attacking side on as many levels as the defending side has up to the fixed band edge
+        def equal_levels(side, n):
+            p0 = best(side)
+            if n < 1 or p0 is None:
+                return ""
+            lo, hi = (p0 - (n - 1) * TICK, p0) if side == "B" else (p0, p0 + (n - 1) * TICK)
+            return sum(sz for p, sz in levels[side].items() if lo - 1e-9 <= p <= hi + 1e-9)
+
+        row.append(equal_levels("B", 0 if a is None or a > hi_band + 1e-9 else int((hi_band - a) / TICK + 1e-9) + 1))
+        row.append(equal_levels("A", 0 if b is None or b < lo_band - 1e-9 else int((b - lo_band) / TICK + 1e-9) + 1))
         ta, tb = total("A"), total("B")
         row += [ta - written["A"], acc["A"]["up"], acc["A"]["down"], tb - written["B"], acc["B"]["up"], acc["B"]["down"]]
         va, vb = visible_total("A"), visible_total("B")
@@ -468,6 +479,7 @@ def replay(w):
 header = ["window_id", "second", "buy", "sell", "trades", "last", "high", "low", "bid", "ask"]
 for side in ("ask", "bid"):
     header += [f"{side}_{c}" for c in ("add", "add_w1", "add_wl", "cancel", "cancel_w1", "cancel_wl", "fill", "reload", "rest")]
+header += ["bid_rest_top", "ask_rest_bottom"]
 header += ["ask_refill", "ask_ep_up", "ask_ep_down", "bid_refill", "bid_ep_up", "bid_ep_down",
            "ask_hidden", "ask_refill_visible", "bid_hidden", "bid_refill_visible"]
 for limit in LIMITS:

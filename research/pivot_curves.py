@@ -23,9 +23,9 @@ crossed book have no curve values.
     att_large      large attacker series / attacker aggressor volume (threshold per session relative to the
                    previous 60 days, large_limits(); without the series data the fixed 60 RTH / 20 night)   0..1
     def_large      the same for the defenders                                                                0..1
-    balance        resting size per price level inside the band, (defending - attacking) / (sum)           -1..1
-                   (defending levels: from its best price to the band edge, the same for the attacking side;
-                   the plain sizes would follow the price position in the fixed band, not the order flow)
+    balance        (defending - attacking) / (sum) of the resting sizes on the same number of price levels  -1..1
+                   (at a high the ask from the best ask up to the fixed band top, high + 20 ticks, and the bid on
+                   as many levels from the best bid down; a low mirrored; NaN with a crossed book)
     volume         aggressor volume of 30 s / its median in the part of day                                 0..
 
 Normalized time: T0 = -1, the swing second Tx = 0, Tend = +1, linear in between on both sides. Each window is
@@ -170,12 +170,9 @@ def mirrored(df: pd.DataFrame, windows: pd.DataFrame) -> pd.DataFrame:
     bid = pd.to_numeric(df.bid, errors="coerce").to_numpy(float)
     ask = pd.to_numeric(df.ask, errors="coerce").to_numpy(float)
     mid = np.where(df.crossed.to_numpy() == 1, np.nan, (bid + ask) / 2)
-    low = df.window_id.map(windows.band_low).to_numpy(float)
-    top = df.window_id.map(windows.band_high).to_numpy(float)
-    ask_levels = np.where(ask <= top, (top - ask) / TICK + 1, np.nan)
-    bid_levels = np.where(bid >= low, (bid - low) / TICK + 1, np.nan)
-    out["def_levels"] = np.where(high, ask_levels, bid_levels)
-    out["att_levels"] = np.where(high, bid_levels, ask_levels)
+    # the attacking side on as many levels as the defending side has up to the fixed band edge
+    out["att_rest_eq"] = np.where(high, pd.to_numeric(df.bid_rest_top, errors="coerce").to_numpy(float),
+                                  pd.to_numeric(df.ask_rest_bottom, errors="coerce").to_numpy(float))
     out["mid_att"] = np.where(high, mid, -mid)          # rises when the attack succeeds
     out["crossed"] = df.crossed.to_numpy()
     return out
@@ -249,7 +246,7 @@ def curves(m: pd.DataFrame, windows: pd.DataFrame, base: np.ndarray | None = Non
     out["def_hidden"] = ratio(roll("def_hidden"), att)
     out["att_large"] = ratio(roll("att_large"), att)
     out["def_large"] = ratio(roll("def_large"), dfn)
-    rest_d, rest_a = m.def_rest / m.def_levels, m.att_rest / m.att_levels
+    rest_d, rest_a = m.def_rest, m.att_rest_eq.where(m.crossed != 1)
     out["balance"] = ratio(rest_d - rest_a, rest_d + rest_a)
     typical = w.map(n_total)
     out["volume"] = vol30 / typical

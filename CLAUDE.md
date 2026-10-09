@@ -138,6 +138,12 @@ sorrend, és hogy minden esemény az ablakon belül történjen.
   sáv teteje közel van: a sáv geometriája, nem orderflow; ár-szintenkénti sűrűséggel kell újradefiniálni).
 - Balansz átírva szintenkénti sűrűségre (nyugvó méret / árszintek száma a legjobb ártól a sáv széléig): éjszaka
   lapos, RTH-ban a csúcs felé nő; részben még mindig geometria lehet (a mélység a legjobb ár közelében sűrűbb).
+- **Balansz újra (2026-10-09, felhasználói döntés):** High-nál az ask oldal teteje a belépéstől rögzített (csúcs +
+  20 tick, a sáv teteje), a védő méret a legjobb asktól eddig; a bid oldalon mindig annyi szint, ahány a legjobb asktól
+  a rögzített tetőig van, a legjobb bidtől lefelé. Low tükrözve. Balansz = (védő − támadó) / összeg, azonos szintszámon,
+  sűrűség nélkül. C#: új `bid_rest_top`, `ask_rest_bottom` oszlopok (teszt bájtra egyezik). A felhasználónak újra kell
+  futtatnia a `pivots`-ot (`--force`) a `pivot_events.csv`-re és a `candidate_events.csv`-re; utána a 4-6. lépés
+  balansz-eseményei újraszámolandók.
 - 4. lépés (`research/pivot_sequences.py`, ResearchData `results/pivots/sequences/`): 64 eseménytípus. Az első,
   laza definícióval (q20/q80, 5 s) szinte minden esemény az ablakok 90-100%-ában és rögtön T0 után történt, ezért
   szigorítva: q95/q5, 15 s, CUSUM H = 10 (csak az esemény-gyakoriságok alapján, eredményre nem hangolva). Medián 37

@@ -30,6 +30,11 @@ public sealed class PivotWindow
 ///                            price of that side before the change, H = half band in ticks
 ///   {ask,bid}_reload         iceberg reload inside the band: the size an M sets above what was left after the fills
 ///   {ask,bid}_rest           resting size of that side inside the band at the end of the second
+///   bid_rest_top             resting bid size on as many price levels from the best bid down as there are from the
+///                            best ask up to the band high (the fixed top at a high: high + 20 ticks), at the end of
+///                            the second; empty without a best bid and ask or with the best ask above the band high
+///   ask_rest_bottom          the mirror at a low: ask size on as many levels from the best ask up as there are from
+///                            the band low up to the best bid
 ///   {ask,bid}_refill         refill on the best price: an episode lasts while the best price of the side stays,
 ///                            Q0 = its resting size at the start, A = aggressor volume against it at that price,
 ///                            the counter is the sum of max(0, A - Q0) of the closed episodes plus the open one
@@ -527,6 +532,8 @@ public sealed class PivotFlowCollector
                 book.SizeBetween(side, w.BandLow, w.BandHigh, tick).ToString(),
             });
         }
+        values.Add(EqualLevels(book, 'B', ask == MboRecord.UndefinedPrice || ask > w.BandHigh ? 0 : (w.BandHigh - ask) / tick + 1));
+        values.Add(EqualLevels(book, 'A', bid == MboRecord.UndefinedPrice || bid < w.BandLow ? 0 : (bid - w.BandLow) / tick + 1));
         values.AddRange(new[]
         {
             (askRefill - s.AskRefillWritten).ToString(), s.Ask.EpisodesUp.ToString(), s.Ask.EpisodesDown.ToString(),
@@ -558,6 +565,16 @@ public sealed class PivotFlowCollector
         s.Second++;
     }
 
+    // resting size of the side on n price levels from its best price away from the market, empty when n < 1
+    private string EqualLevels(Book book, char side, long n)
+    {
+        var best = side == 'B' ? book.BestBid : book.BestAsk;
+        if (n < 1 || best == MboRecord.UndefinedPrice)
+            return "";
+        var span = (n - 1) * tick;
+        return (side == 'B' ? book.SizeBetween(side, best - span, best, tick) : book.SizeBetween(side, best, best + span, tick)).ToString();
+    }
+
     private static string PriceOrEmpty(long price) => price == MboRecord.UndefinedPrice ? "" : Extractor.Price(price);
 
     private static string Number(double value) => value.ToString("0.####", CultureInfo.InvariantCulture);
@@ -568,6 +585,7 @@ public sealed class PivotFlowCollector
         foreach (var side in new[] { "ask", "bid" })
             columns.AddRange(new[] { "add", "add_w1", "add_wl", "cancel", "cancel_w1", "cancel_wl", "fill", "reload", "rest" }
                 .Select(c => $"{side}_{c}"));
+        columns.AddRange(new[] { "bid_rest_top", "ask_rest_bottom" });
         columns.AddRange(new[] { "ask_refill", "ask_ep_up", "ask_ep_down", "bid_refill", "bid_ep_up", "bid_ep_down",
             "ask_hidden", "ask_refill_visible", "bid_hidden", "bid_refill_visible" });
         foreach (var limit in LargeLimits)

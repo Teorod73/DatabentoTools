@@ -46,6 +46,9 @@ ablak egy másodperce (UTC), minden forgalmi oszlop az abban a másodpercben tö
 - `ask_*`, `bid_*`: az adott oldal betett (`add`), teljesülés nélkül kivett (`cancel`) és teljesült (`fill`) mérete
   a sávban; `_w1` súlya 1/(1+d), `_wl` súlya max(0, 1 - d/H), ahol d a változás előtti legjobb ártól mért tick, H a
   sáv fele tickben. `reload`: natív iceberg újratöltése a sávban. `rest`: nyugvó méret a sávban a másodperc végén.
+- `bid_rest_top`: nyugvó bid méret annyi árszinten a legjobb bidtől lefelé, ahány szint a legjobb asktól a sáv rögzített
+  tetejéig (High-nál csúcs + 20 tick) van; `ask_rest_bottom` ennek tükre Low-nál (ask a legjobb asktól felfelé, annyi
+  szinten, ahány a sáv aljától a legjobb bidig van). Üres, ha nincs legjobb ár, vagy a legjobb ár a rögzített szélen túl van.
   A rendelés fill-jei (F) a C vagy M előtt jönnek: a következő C vagy M-nél az összes függő fill teljesült méret,
   a fill után megmaradónál kisebb méret visszavonás, a nagyobb újratöltés (a natív iceberg a látható méretnél nagyobb
   fill után egy M-mel ugyanazon a rendelésen állítja vissza a látható részt, a 2025-03-05-ös diagnosztika szerint).
