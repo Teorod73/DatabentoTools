@@ -71,3 +71,9 @@ HVN min asymmetry 0.8, max overshoot 0.25, forgalommal súlyozva, a besorolás a
   fordulóablakok csúszó küszöbeivel; a kiválasztott minták teljesülésekor kötés a CLAUDE.md-ben rögzített szabályokkal
   (belépés legkorábban a megerősítéskor, stop a szélsőérték + 2 tick, kockázat ≤ 2 x ATR1, 1R / 2R / 3R, 60 perc).
   Kimenet: `trades.csv.gz`, `summary.md`.
+- `template_diagnostics.py <resultsDir> <researchDataDir> <outDir>`: a sablonillesztés diagnosztikája, kereskedés
+  nélkül. A C# adattal rendelkező jelöltek (minden ZigZag-jelölt és a többi 10%-a, súly 10) három osztályban
+  (forduló, lezárult nem forduló, érvénytelenült) és együtt: binenként medián és robusztus szórás (IQR / 1,349), a
+  sablonok eltérése szórásegységben (d), a két jó sablon összevonhatósága, az érvénytelenült szórása a fordulóéhoz
+  képest, és a jó - összes eltérés-profil stabilitása 2024 és 2025 között. Kimenet: `templates.csv`,
+  `separation.csv`, `summary.md`, `figures/<görbe>.png` (2024).

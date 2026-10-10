@@ -218,6 +218,40 @@ sorrend, és hogy minden esemény az ablakon belül történjen.
   ezzel a belépés / stop / cél mechanikával nem ad igazolt nettó előnyt. A teljes teszt (minden jelölt) csak akkor
   érdemes, ha új ötlet ad rá okot.
 
+## Sablonillesztés (terv, 2026-10-10 döntés, az eredmények előtt rögzítve)
+
+Cél: a sorrendminták helyett a görbék teljes formáját hasonlítani, és a megerősítés után minél korábban belépni.
+
+- **Sablonok** (ülésszakonként, High és tükrözött Low együtt): két jó (**forduló** = ZigZag, **lezárult nem
+  forduló** = új csúcs nélkül 2 x ATR1-et visszajött; ez 5-7-szer több, mint a forduló, ezért külön) és egy rossz
+  (**érvénytelenült** = új csúcs, a short stopja ütne). Viszonyítás: az **összes jelölt** sablonja (súlyozva). A rossz
+  sablon csak diagnosztika (félő, hogy a csúcs után nagyon szór). Ha a két jó sablon minden pontozott görbén minden
+  binben a szórás negyedénél közelebb van, összevonjuk.
+- Sablon = binenként medián és robusztus szórás (IQR / 1,349, alsó korlát a görbe szórásmediánjának 10%-a). Élesben
+  csúszó: az előző 120 naptári nap ablakaiból, a saját seansz nélkül, legalább 40 korábbi seansz.
+- **Időtengely:** a csúcs előtt T0 = -1 … csúcs = 0, 20 bin. A csúcs után a sablonban 0 … +1 (a valódi vég), 20 bin;
+  élőben a vég ismeretlen, ezért L = r x (csúcs előtti hossz), r ∈ {0,5; 0,75; 1; 1,25; 1,5; 2; 2,5; 3; 4}, csak
+  L > eddig eltelt idő; sablononként a legjobb r, egy sablonon belül minden görbére ugyanaz. Csak teljes binek.
+- **Távolság** görbénként: z = (x - medián) / szórás, z² átlaga a csúcs előtti és külön a csúcs utáni binekben, a
+  kettő egyenlő súllyal.
+- **Pontszám** görbénként: távolság(összes jelölt) - min(távolság(forduló), távolság(lezárult)). Összeg egyenlő
+  súllyal; ha két görbe pontszámainak korrelációja 2024-en > 0,7, a kettő átlaga megy be.
+- **Görbék:** orderflow-csoport: delta, def/att_cancel, def/att_refill, att/def_large, balance, volume; ár-csoport:
+  att_eff, def_eff; def_hidden kimarad (zajos, a volumen 1%-a). Mért együttmozgás az árral (30 s, fordulóablakok):
+  delta ~ középár-változás r = 0,35, volume ~ |középár-változás| r = 0,49, tehát a delta nem árkövető.
+- **Változatok:** (A) orderflow, (B) ár, (C) a kettő átlaga. **Belépés** a megerősítéstől (`confirm_minute`) az ablak
+  végéig az első másodpercben, ahol a pontszám ≥ K; K = az előző 120 nap jelöltjeinek maximális pontszámából a
+  10% / 20% / 30% kötési arányt adó kvantilis. Jelöltenként legfeljebb egy kötés. Kötés a gazdasági próba szabályaival
+  (stop szélsőérték + 2 tick, kockázat ≤ 2 x ATR1, 1R / 2R / 3R, 60 perc, költségek).
+- **Értékelés:** 3 változat x 3 arány, ülésszakonként, 2024 / 2025, alap = minden jelölt a megerősítéskor. 2024-en
+  ülésszakonként egy konfiguráció választható (változat, arány, cél); átmegy, ha 2025-ben nettó R > 0 és a 95%-os
+  sáv alsó széle > 0. 2025 nem teljesen független (a görbéket mindkét év ismeretében definiáltuk).
+- **1. lépés: diagnosztika kereskedés nélkül** (`research/template_diagnostics.py`, a meglévő 10%-os mintán): a
+  három sablon és az összes jelölt sablonja, szórás, eltérés binenként, 2024 / 2025 stabilitás. Egy görbe kimarad, ha
+  2024-ben egyik jó sablon sem tér el az összes jelölttől egyetlen binben sem legalább 0,1 szórással, vagy ha az
+  eltérés-profil 2024 és 2025 között nem hasonló (korreláció < 0,5). Ha egy görbe sem marad, megállunk. A teljes
+  jelöltkör C# adatgyűjtése (kb. 2,8 GB, karcsúsítva kevesebb) csak akkor, ha a diagnosztika érdemi eltérést mutat.
+
 ## Nyitott kérdések, következő lépések
 
 - Élő próba NinjaTrader stratégiaként, sim számlán, egy pozícióval, 2026 októberétől.
