@@ -34,9 +34,12 @@ attacker and the defender side are compared instead; the series are rare, so the
     large_delta       (large attacker - large defender series volume) / (sum), cumulative from T0          -1..1
     large_delta_post  the same, cumulative from the second after the swing second (live: known from the
                       confirmation)                                                                         -1..1
-    large_div         large_delta - delta, the delta cumulative from T0 (the large ones against all)        -2..2
+    large_div         large_delta - small_delta, the small series (all aggressor volume minus the large
+                      series) delta cumulative from T0: the large ones against the small ones (e.g. the small
+                      ones still buy, the large ones already sell)                                          -2..2
     large_div_post    the same from the second after the swing second                                       -2..2
-NaN until the first large series of the sum (and without swing_second for the _post curves).
+NaN until the large series volume of the sum reaches 2 x the large threshold (about two series; with fewer the
+ratio is just +1 or -1), and without swing_second for the _post curves.
 
 Normalized time: T0 = -1, the swing second Tx = 0, Tend = +1, linear in between on both sides. Each window is
 averaged into 40 bins of 0.05, then median and quartiles over the windows per part of day and swing type.
@@ -77,8 +80,8 @@ TITLES = {
     "volume": "Agresszív volumen / szokásos",
     "large_delta": "Nagy-delta (nagy támadó - nagy védő) / összes nagy, T0-tól",
     "large_delta_post": "Nagy-delta a csúcs után, a csúcstól",
-    "large_div": "Nagy-delta - delta, T0-tól",
-    "large_div_post": "Nagy-delta - delta, a csúcstól",
+    "large_div": "Nagy-delta - kis-delta, T0-tól",
+    "large_div_post": "Nagy-delta - kis-delta, a csúcstól",
 }
 
 
@@ -301,6 +304,7 @@ def large_curves(m: pd.DataFrame, windows: pd.DataFrame) -> pd.DataFrame:
     if "swing_second" in windows:
         starts["_post"] = m.window_id.map(windows.swing_second).to_numpy(float) + 1
     second = m.second.to_numpy(float)
+    minimum = 2 * m.window_id.map(windows.large_limit).to_numpy(float) if "large_limit" in windows else 0.0
     # no large series threshold for the session (early 2024): NaN; a NaN must not enter the running sums
     known = ~(np.isnan(m.att_large.to_numpy(float)) | np.isnan(m.def_large.to_numpy(float)))
     for suffix, start in starts.items():
@@ -308,10 +312,12 @@ def large_curves(m: pd.DataFrame, windows: pd.DataFrame) -> pd.DataFrame:
         att_l, def_l, att_v, def_v = (cumulative(np.where(inside & known, np.nan_to_num(m[c].to_numpy(float)), 0.0))
                                       for c in ("att_large", "def_large", "att_vol", "def_vol"))
         inside &= known
-        large, total = att_l + def_l, att_v + def_v
+        large = att_l + def_l
+        att_s, def_s = att_v - att_l, def_v - def_l
+        small = att_s + def_s
         with np.errstate(invalid="ignore", divide="ignore"):
-            ld = np.where(inside & (large > 0), (att_l - def_l) / large, np.nan)
-            d = np.where(inside & (total > 0), (att_v - def_v) / total, np.nan)
+            ld = np.where(inside & (large >= minimum) & (large > 0), (att_l - def_l) / large, np.nan)
+            d = np.where(inside & (small > 0), (att_s - def_s) / small, np.nan)
         out[f"large_delta{suffix}"] = ld
         out[f"large_div{suffix}"] = ld - d
     for c in LARGE_CURVES:
