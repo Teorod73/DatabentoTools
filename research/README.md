@@ -77,3 +77,7 @@ HVN min asymmetry 0.8, max overshoot 0.25, forgalommal súlyozva, a besorolás a
   sablonok eltérése szórásegységben (d), a két jó sablon összevonhatósága, az érvénytelenült szórása a fordulóéhoz
   képest, és a jó - összes eltérés-profil stabilitása 2024 és 2025 között. Kimenet: `templates.csv`,
   `separation.csv`, `summary.md`, `figures/<görbe>.png` (2024).
+- `template_auc.py <resultsDir> <researchDataDir> <outDir>`: az élő sablon-pontszám szétválasztó ereje (AUC),
+  kereskedés nélkül. Sablonok a másik évből; a csúcs utáni rész a nyújtási rácson (L = r x csúcs előtti hossz), csak
+  teljes binek; pontszám = távolság(összes) - min(távolság(forduló), távolság(lezárult)); A = orderflow, B = ár,
+  C = átlag; a megerősítéskor és +30 / +60 / +120 s-nál. Kimenet: `scores.csv.gz`, `auc.csv`, `summary.md`.

@@ -57,13 +57,14 @@ def weighted_quantiles(x: np.ndarray, w: np.ndarray, qs) -> list[float]:
     return [float(np.interp(q, cum, x)) for q in qs]
 
 
-def templates(per: pd.DataFrame) -> pd.DataFrame:
+def templates(per: pd.DataFrame, curves: list[str] | None = None) -> pd.DataFrame:
+    curves = curves or CURVES
     rows = []
     groups = [(c, per[per.cls == c]) for c in CLASSES] + [("all", per)]
     for cls, g in groups:
         for (year, part, b), h in g.groupby(["year", "part", "bin"]):
             w = h.weight.to_numpy(float)
-            for c in CURVES:
+            for c in curves:
                 q25, q50, q75 = weighted_quantiles(h[c].to_numpy(float), w, (0.25, 0.5, 0.75))
                 rows.append({"year": year, "part": part, "cls": cls, "bin": b, "curve": c, "median": q50,
                              "q25": q25, "q75": q75, "s": (q75 - q25) / 1.349, "n": int(h[c].notna().sum())})
@@ -153,7 +154,8 @@ def plot(t: pd.DataFrame, curve: str, path: str) -> None:
     plt.close(fig)
 
 
-def main(results: str, data: str, out_dir: str) -> None:
+def load_candidate_curves(results: str, data: str, out_dir: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """The candidate windows with order flow (with swing_second and the class) and their curves per second."""
     seq = os.path.join(results, "pivots", "sequences")
     limits = pd.read_csv(os.path.join(seq, "large_limits.csv"))
     norms = pt.norms(results, os.path.join(data, "pivots"), limits)
@@ -161,7 +163,7 @@ def main(results: str, data: str, out_dir: str) -> None:
     cands = pt.candidate_windows(results)
     cands = pw.add_swing_second(cands, data)
     cands["cls"] = np.where(cands["pivot"], "pivot", np.where(cands.resolved, "resolved", "invalidated"))
-    os.makedirs(os.path.join(out_dir, "figures"), exist_ok=True)
+    os.makedirs(out_dir, exist_ok=True)
     cands.assign(valid=cands.swing_second.notna()).to_csv(os.path.join(out_dir, "windows.csv"), index=False)
     frames = []
     for flow in (os.path.join(data, "pivots"), os.path.join(data, "candidates", "pivots")):
@@ -171,7 +173,12 @@ def main(results: str, data: str, out_dir: str) -> None:
     m = pc.mirrored(df, windows).sort_values(["window_id", "second"]).reset_index(drop=True)
     del df, frames
     cur = pc.curves(m, windows, norms=norms)
-    del m
+    return windows, cur
+
+
+def main(results: str, data: str, out_dir: str) -> None:
+    windows, cur = load_candidate_curves(results, data, out_dir)
+    os.makedirs(os.path.join(out_dir, "figures"), exist_ok=True)
     per = pc.binned(cur, windows, CURVES)
     per["cls"] = per.window_id.map(windows.cls)
     per["weight"] = per.window_id.map(windows.weight)
