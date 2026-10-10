@@ -302,6 +302,14 @@ Cél: a sorrendminták helyett a görbék teljes formáját hasonlítani, és a 
   és görbénként is. **Döntés: ha a legjobb változat AUC-ja a megerősítéskor és +60 s-nál mindkét évben 0,6 alatt van,
   a kereskedési teszt nem érdemes, megállunk.**
 
+- **AUC eredménye** (2026-10-10, ResearchData `results/templates/auc/`): jó (forduló + lezárult) kontra érvénytelenült,
+  a megerősítéskor / +60 s: éjszaka A 0,52-0,54, B 0,54-0,56, C 0,53-0,57 (mindkét évben); RTH C 2024 0,588 / 0,601,
+  2025 0,554 / 0,557. Éjszaka a döntés szerint megállunk; RTH betű szerint épp nem (2024 +60 s 0,601), de 2025-ben
+  0,55, érdemben gyenge. Egyes görbék 0,47-0,56. Forduló kontra a többi: A 0,63-0,71, ezt szinte csak a **volumen**
+  adja (egyedül 0,64-0,70; a fordulók nagyobb aktivitású események, összhangban azzal, hogy a fordulóknál a 2 x ATR1 a
+  ZigZag-küszöbhöz képest nagy); a hatékonyság fordítva (0,36-0,48). A forduló - lezárult különbség viszont
+  gazdaságilag kevés, mert mindkettő jó short.
+
 ## Nyitott kérdések, következő lépések
 
 - Élő próba NinjaTrader stratégiaként, sim számlán, egy pozícióval, 2026 októberétől.
