@@ -252,6 +252,20 @@ Cél: a sorrendminták helyett a görbék teljes formáját hasonlítani, és a 
   eltérés-profil 2024 és 2025 között nem hasonló (korreláció < 0,5). Ha egy görbe sem marad, megállunk. A teljes
   jelöltkör C# adatgyűjtése (kb. 2,8 GB, karcsúsítva kevesebb) csak akkor, ha a diagnosztika érdemi eltérést mutat.
 
+- **Diagnosztika eredménye** (2026-10-10, ResearchData `results/templates/`): ablakok 2024 / 2025 éjszaka 1452 / 1500
+  forduló, 1140 / 1029 lezárult, 1564 / 1699 érvénytelenült; RTH 823 / 848, 399 / 400, 827 / 847. (1) Az érvénytelenült
+  sablon **nem szór jobban**, mint a forduló (szórásarány a csúcs után 0,9-1,2; a volumenen 0,5-0,7). (2) Az eltérések
+  kicsik és a vég felé nőnek: forduló - érvénytelenült |d| a csúcs előtt 0-0,3, közvetlenül utána (0..0,25) 0,1-0,4,
+  a vég előtt (0,75..1) 0,7-1,0 — ez utóbbi maga a kimenet (a valódi véggel normalizálva), élőben nem elérhető. Kivétel
+  a volumen: a forduló az egész ablakban 0,4-0,9 szórással nagyobb (nagyobb esemény). Éjszaka a balansz a csúcs előtt
+  +0,33 (vastagabb védő oldal a fordulóknál), RTH-ban nincs. (3) A 2024 / 2025 eltérés-profilok nagyon stabilak (r
+  0,9-0,99). (4) A két jó sablon nem vonható össze (max |d| 0,24-0,76, legnagyobb a volumen és a hatékonyság). (5) A
+  nagy-görbék (att/def_large) mediánja szinte mindig 0, medián / IQR sablonra alkalmatlanok (a „marad” jelölésük
+  műtermék). (6) att_eff ~ def_eff r = -0,91 RTH, -0,76 éjszaka (gyakorlatilag egy görbe); a cancel-görbék 0,6-0,7-tel
+  együtt mozognak a hatékonysággal (részben árkövetők). A rögzített „marad” szabály túl laza volt (a vég előtti binek
+  teljesítik). Javaslat: a következő diagnosztika az élő pontszám szétválasztó ereje (AUC) a megerősítéskor és utána,
+  kereskedés nélkül.
+
 ## Nyitott kérdések, következő lépések
 
 - Élő próba NinjaTrader stratégiaként, sim számlán, egy pozícióval, 2026 októberétől.
