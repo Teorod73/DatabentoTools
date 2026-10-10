@@ -147,8 +147,12 @@ sorrend, és hogy minden esemény az ablakon belül történjen.
 - Új balansz futtatva (2026-10-09, a többi oszlop bájtra azonos a régi futással), 3. lépés újraszámolva: az RTH-s
   púp (a geometria) eltűnt, a görbe közel lapos, medián 0 és +0,05 között (High kb. 0,03-mal a tükrözött Low fölött).
   Kis kiugrás közvetlenül a csúcson (RTH Low 0,0 → 0,03), utána gyors visszaesés; ez részben még mechanikus lehet
-  (gyors mozgás után a támadó oldal könyve a legjobb ár mögött még nem töltődött vissza). A 4-6. lépés még a régi
-  balansszal.
+  (gyors mozgás után a támadó oldal könyve a legjobb ár mögött még nem töltődött vissza).
+- 4-6. lépés újrafuttatva az új balansszal (2026-10-10): csak a balansz-események változtak (RTH-ban a `balance_neg`
+  / `balance_lo` a csúcs utánról a csúcs elé került, u ≈ -0,3 / -0,4). Az átment balanszos minták jóval kevesebbek
+  (RTH hármas 54 → 29, négyes 79 → 23, éjszakai hármas 200 → 79): a régiek egy része a geometriából jött; a
+  megmaradók 2025-ben is nagyrészt átmennek, de ritkák (RTH hármas az ablakok kb. 21%-a). A 70 kiválasztott minta
+  azonos (egyikben sincs balansz), a 6. lépés eredménye bájtra azonos.
 - 4. lépés (`research/pivot_sequences.py`, ResearchData `results/pivots/sequences/`): 64 eseménytípus. Az első,
   laza definícióval (q20/q80, 5 s) szinte minden esemény az ablakok 90-100%-ában és rögtön T0 után történt, ezért
   szigorítva: q95/q5, 15 s, CUSUM H = 10 (csak az esemény-gyakoriságok alapján, eredményre nem hangolva). Medián 37
