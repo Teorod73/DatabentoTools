@@ -291,6 +291,17 @@ Cél: a sorrendminták helyett a görbék teljes formáját hasonlítani, és a 
   +0,14…+0,20), RTH-ban a csúcs után a fordulónál gyorsabban fordul a nagy-delta a védők felé. Stabilitás r 0,62-0,91.
   A kicsik-nagyok szembeállításához skálázni kellene (pl. mindkét delta z-score-ja a csúszó szórásukkal).
 
+- **AUC-diagnosztika (terv, 2026-10-10, az eredmény előtt rögzítve; `research/template_auc.py`):** az élő pontszám
+  minden jelöltre a megerősítéskor, és utána +30 / +60 / +120 s-nál, ha az ablak még nyitott. Görbék: (A) orderflow =
+  delta, def/att_cancel, def/att_refill, balance, volume, large_delta_post (+ large_delta csak RTH-ban); (B) ár =
+  att_eff, def_eff; (C) az A és B pontszám átlaga. A large_div kimarad. Sablonok a másik évből (2024-es sablon pontozza
+  2025-öt és fordítva; az élő változat csúszó 120 napos lesz). Csúcs előtti binek a T0-csúcs normalizálással, csúcs
+  utáni binek az r-rács nyújtással, csak teljes binek, sablononként a legjobb r. Pontszám = távolság(összes) -
+  min(távolság(forduló), távolság(lezárult)), görbék egyenlő súllyal. AUC (súlyozva, a minta súlya 10): jó (forduló +
+  lezárult) kontra érvénytelenült, és forduló kontra a többi; ülésszakonként, évenként, változatonként, időpontonként,
+  és görbénként is. **Döntés: ha a legjobb változat AUC-ja a megerősítéskor és +60 s-nál mindkét évben 0,6 alatt van,
+  a kereskedési teszt nem érdemes, megállunk.**
+
 ## Nyitott kérdések, következő lépések
 
 - Élő próba NinjaTrader stratégiaként, sim számlán, egy pozícióval, 2026 októberétől.
