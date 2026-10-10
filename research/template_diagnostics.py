@@ -169,7 +169,9 @@ def main(results: str, data: str, out_dir: str) -> None:
         frames.append(df)
     df = pd.concat(frames, ignore_index=True)
     m = pc.mirrored(df, windows).sort_values(["window_id", "second"]).reset_index(drop=True)
+    del df, frames
     cur = pc.curves(m, windows, norms=norms)
+    del m
     per = pc.binned(cur, windows, CURVES)
     per["cls"] = per.window_id.map(windows.cls)
     per["weight"] = per.window_id.map(windows.weight)

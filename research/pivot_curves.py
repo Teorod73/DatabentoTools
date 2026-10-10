@@ -287,22 +287,34 @@ def curves(m: pd.DataFrame, windows: pd.DataFrame, base: np.ndarray | None = Non
 
 def large_curves(m: pd.DataFrame, windows: pd.DataFrame) -> pd.DataFrame:
     """The cumulative large series delta and its difference to the delta, from T0 and from after the swing second
-    (m sorted by window and second)."""
-    out = pd.DataFrame(index=m.index, columns=LARGE_CURVES, dtype=float)
-    starts = {"": m.window_id.map(windows.entry_minute)}
+    (m sorted by window and second, so every window is one block of rows)."""
+    wid = m.window_id.to_numpy()
+    first = np.r_[0, np.flatnonzero(wid[1:] != wid[:-1]) + 1]
+    block = np.repeat(first, np.diff(np.r_[first, len(wid)]))
+
+    def cumulative(x: np.ndarray) -> np.ndarray:
+        cs = np.cumsum(x)
+        return cs - np.where(block > 0, cs[block - 1], 0.0)
+
+    out = pd.DataFrame(index=m.index)
+    starts = {"": m.window_id.map(windows.entry_minute).to_numpy(float)}
     if "swing_second" in windows:
-        starts["_post"] = m.window_id.map(windows.swing_second) + 1
+        starts["_post"] = m.window_id.map(windows.swing_second).to_numpy(float) + 1
+    second = m.second.to_numpy(float)
     for suffix, start in starts.items():
-        inside = (m.second >= start).to_numpy()
-        cum = {c: pd.Series(np.where(inside, m[c].to_numpy(float), 0.0)).groupby(m.window_id.to_numpy()).cumsum()
-               for c in ("att_large", "def_large", "att_vol", "def_vol")}
-        large = cum["att_large"] + cum["def_large"]
-        total = cum["att_vol"] + cum["def_vol"]
-        ld = ((cum["att_large"] - cum["def_large"]) / large).where(inside & (large > 0))
-        d = ((cum["att_vol"] - cum["def_vol"]) / total).where(inside & (total > 0))
-        out[f"large_delta{suffix}"] = ld.to_numpy()
-        out[f"large_div{suffix}"] = (ld - d).to_numpy()
-    return out
+        inside = second >= start
+        att_l, def_l, att_v, def_v = (cumulative(np.where(inside, m[c].to_numpy(float), 0.0))
+                                      for c in ("att_large", "def_large", "att_vol", "def_vol"))
+        large, total = att_l + def_l, att_v + def_v
+        with np.errstate(invalid="ignore", divide="ignore"):
+            ld = np.where(inside & (large > 0), (att_l - def_l) / large, np.nan)
+            d = np.where(inside & (total > 0), (att_v - def_v) / total, np.nan)
+        out[f"large_delta{suffix}"] = ld
+        out[f"large_div{suffix}"] = ld - d
+    for c in LARGE_CURVES:
+        if c not in out:
+            out[c] = np.nan
+    return out[LARGE_CURVES]
 
 
 def normalized_time(out: pd.DataFrame, windows: pd.DataFrame) -> pd.Series:
