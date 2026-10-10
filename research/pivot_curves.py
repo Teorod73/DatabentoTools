@@ -301,10 +301,13 @@ def large_curves(m: pd.DataFrame, windows: pd.DataFrame) -> pd.DataFrame:
     if "swing_second" in windows:
         starts["_post"] = m.window_id.map(windows.swing_second).to_numpy(float) + 1
     second = m.second.to_numpy(float)
+    # no large series threshold for the session (early 2024): NaN; a NaN must not enter the running sums
+    known = ~(np.isnan(m.att_large.to_numpy(float)) | np.isnan(m.def_large.to_numpy(float)))
     for suffix, start in starts.items():
         inside = second >= start
-        att_l, def_l, att_v, def_v = (cumulative(np.where(inside, m[c].to_numpy(float), 0.0))
+        att_l, def_l, att_v, def_v = (cumulative(np.where(inside & known, np.nan_to_num(m[c].to_numpy(float)), 0.0))
                                       for c in ("att_large", "def_large", "att_vol", "def_vol"))
+        inside &= known
         large, total = att_l + def_l, att_v + def_v
         with np.errstate(invalid="ignore", divide="ignore"):
             ld = np.where(inside & (large > 0), (att_l - def_l) / large, np.nan)

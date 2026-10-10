@@ -188,8 +188,10 @@ def main(results: str, data: str, out_dir: str) -> None:
         for c in CURVES:
             g = sep[(sep.part == part) & (sep.curve == c)]
             prof = g.assign(good=(g["pivot-all"] + g["resolved-all"]) / 2).pivot(index="bin", columns="year", values="good")
-            r = prof[2024].corr(prof[2025])
+            r = prof[2024].corr(prof[2025]) if {2024, 2025} <= set(prof.columns) else np.nan
             d24 = g[g.year == 2024]
+            if d24.empty:
+                continue
             keep = bool(max(d24["pivot-all"].abs().max(), d24["resolved-all"].abs().max()) >= KEEP_D and r >= KEEP_CORR)
             corr[(part, c)] = (r, keep)
 
