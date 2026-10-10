@@ -28,6 +28,16 @@ crossed book have no curve values.
                    as many levels from the best bid down; a low mirrored; NaN with a crossed book)
     volume         aggressor volume of 30 s / its median in the part of day                                 0..
 
+The large series curves (LARGE_CURVES, not in CURVES: the event steps 4-6 were made with att_large / def_large).
+The share of the large series rises with the trade rate (more small orders fall into one 10 ms series), so the
+attacker and the defender side are compared instead; the series are rare, so the sums are cumulative:
+    large_delta       (large attacker - large defender series volume) / (sum), cumulative from T0          -1..1
+    large_delta_post  the same, cumulative from the second after the swing second (live: known from the
+                      confirmation)                                                                         -1..1
+    large_div         large_delta - delta, the delta cumulative from T0 (the large ones against all)        -2..2
+    large_div_post    the same from the second after the swing second                                       -2..2
+NaN until the first large series of the sum (and without swing_second for the _post curves).
+
 Normalized time: T0 = -1, the swing second Tx = 0, Tend = +1, linear in between on both sides. Each window is
 averaged into 40 bins of 0.05, then median and quartiles over the windows per part of day and swing type.
 Outputs: curves.csv.gz (window x bin), shape.csv (median, q25, q75), shape.md (consistency table), and one figure
@@ -51,6 +61,7 @@ LARGE = {"rth": 60, "night": 20}
 HIGH_COLOR, LOW_COLOR = "#2a78d6", "#eb6834"
 CURVES = ["delta", "def_cancel", "att_cancel", "def_refill", "att_refill", "def_hidden",
           "att_eff", "def_eff", "att_large", "def_large", "balance", "volume"]
+LARGE_CURVES = ["large_delta", "large_delta_post", "large_div", "large_div_post"]
 TITLES = {
     "delta": "Delta% (támadó - védő) / összes",
     "def_cancel": "Védő oldal: kivett / (kivett + betett), 1/(1+d)",
@@ -64,6 +75,10 @@ TITLES = {
     "def_large": "Nagy védők aránya",
     "balance": "Könyv balansz azonos szintszámon (védő - támadó) / összes",
     "volume": "Agresszív volumen / szokásos",
+    "large_delta": "Nagy-delta (nagy támadó - nagy védő) / összes nagy, T0-tól",
+    "large_delta_post": "Nagy-delta a csúcs után, a csúcstól",
+    "large_div": "Nagy-delta - delta, T0-tól",
+    "large_div_post": "Nagy-delta - delta, a csúcstól",
 }
 
 
@@ -263,7 +278,30 @@ def curves(m: pd.DataFrame, windows: pd.DataFrame, base: np.ndarray | None = Non
         out.loc[idx, "def_eff"] = -efficiency(mid, m.def_vol.to_numpy()[idx], n_att[part]) / windows.atr1[wid]
 
     out.loc[m.crossed.to_numpy() == 1, CURVES] = np.nan
+    large = large_curves(m, windows)
+    for c in LARGE_CURVES:
+        out[c] = large[c].to_numpy()
     out.attrs["norms"] = (n_total, n_att)
+    return out
+
+
+def large_curves(m: pd.DataFrame, windows: pd.DataFrame) -> pd.DataFrame:
+    """The cumulative large series delta and its difference to the delta, from T0 and from after the swing second
+    (m sorted by window and second)."""
+    out = pd.DataFrame(index=m.index, columns=LARGE_CURVES, dtype=float)
+    starts = {"": m.window_id.map(windows.entry_minute)}
+    if "swing_second" in windows:
+        starts["_post"] = m.window_id.map(windows.swing_second) + 1
+    for suffix, start in starts.items():
+        inside = (m.second >= start).to_numpy()
+        cum = {c: pd.Series(np.where(inside, m[c].to_numpy(float), 0.0)).groupby(m.window_id.to_numpy()).cumsum()
+               for c in ("att_large", "def_large", "att_vol", "def_vol")}
+        large = cum["att_large"] + cum["def_large"]
+        total = cum["att_vol"] + cum["def_vol"]
+        ld = ((cum["att_large"] - cum["def_large"]) / large).where(inside & (large > 0))
+        d = ((cum["att_vol"] - cum["def_vol"]) / total).where(inside & (total > 0))
+        out[f"large_delta{suffix}"] = ld.to_numpy()
+        out[f"large_div{suffix}"] = (ld - d).to_numpy()
     return out
 
 
@@ -276,11 +314,11 @@ def normalized_time(out: pd.DataFrame, windows: pd.DataFrame) -> pd.Series:
     return pd.Series(u, index=out.index)
 
 
-def binned(out: pd.DataFrame, windows: pd.DataFrame) -> pd.DataFrame:
+def binned(out: pd.DataFrame, windows: pd.DataFrame, columns: list[str] | None = None) -> pd.DataFrame:
     u = normalized_time(out, windows)
     keep = (u >= -1) & (u <= 1)
     b = np.clip(np.round(np.floor((u[keep] + 1) / 0.05) * 0.05 - 1, 2), -1, 0.95)
-    per = out[keep].assign(bin=b).groupby(["window_id", "bin"])[CURVES].mean().reset_index()
+    per = out[keep].assign(bin=b).groupby(["window_id", "bin"])[columns or CURVES].mean().reset_index()
     per["type"] = per.window_id.map(windows.type)
     per["part"] = per.window_id.map(windows.part)
     return per

@@ -266,6 +266,15 @@ Cél: a sorrendminták helyett a görbék teljes formáját hasonlítani, és a 
   teljesítik). Javaslat: a következő diagnosztika az élő pontszám szétválasztó ereje (AUC) a megerősítéskor és utána,
   kereskedés nélkül.
 
+- **Nagy-sorozat görbék újra (2026-10-10, felhasználói döntés):** az att_large / def_large (nagy / összes egy oldalon)
+  hibás elképzelés: több kötés esetén a 10 ms-os összevonás miatt több a nagy sorozat is. Helyette (a sablonillesztésben;
+  a 4-6. lépés eredményei a régivel készültek): `large_delta` = (nagy támadó - nagy védő) / (összes nagy), halmozva
+  T0-tól; `large_delta_post` ugyanez a csúcs utáni másodperctől; `large_div` = large_delta - delta (a delta is T0-tól
+  halmozva: a nagyok a többiekkel szemben, pl. a kicsik még vesznek, a nagyok már eladnak); `large_div_post` a csúcstól.
+  Érték csak az első nagy sorozattól. Halmozva, mert ritkák (2024 fordulóablakok: a volumen 13,9% / 7,4%-a éjszaka /
+  RTH, 8% / 2% ablakban egy sincs; a másodpercek 18% / 8%-ában még nincs érték). A large_delta és a halmozott delta
+  korrelációja 0,57 / 0,56.
+
 ## Nyitott kérdések, következő lépések
 
 - Élő próba NinjaTrader stratégiaként, sim számlán, egy pozícióval, 2026 októberétől.

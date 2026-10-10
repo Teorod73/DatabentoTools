@@ -38,7 +38,8 @@ YEARS = (2024, 2025)
 CLASSES = ("pivot", "resolved", "invalidated")
 NAMES = {"pivot": "forduló", "resolved": "lezárult nem forduló", "invalidated": "érvénytelenült", "all": "összes jelölt"}
 COLORS = {"pivot": "#2a78d6", "invalidated": "#eb6834", "resolved": "#1baf7a", "all": "#6f6e69"}
-CURVES = [c for c in pc.CURVES if c != "def_hidden"]
+# att_large / def_large are replaced by the large series delta curves (2026-10-10)
+CURVES = [c for c in pc.CURVES if c not in ("def_hidden", "att_large", "def_large")] + pc.LARGE_CURVES
 MERGE_D = 0.25
 KEEP_D = 0.1
 KEEP_CORR = 0.5
@@ -169,7 +170,7 @@ def main(results: str, data: str, out_dir: str) -> None:
     df = pd.concat(frames, ignore_index=True)
     m = pc.mirrored(df, windows).sort_values(["window_id", "second"]).reset_index(drop=True)
     cur = pc.curves(m, windows, norms=norms)
-    per = pc.binned(cur, windows)
+    per = pc.binned(cur, windows, CURVES)
     per["cls"] = per.window_id.map(windows.cls)
     per["weight"] = per.window_id.map(windows.weight)
     per["year"] = pd.to_datetime(per.window_id.map(windows.session)).dt.year
