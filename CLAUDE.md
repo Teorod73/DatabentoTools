@@ -283,6 +283,14 @@ Cél: a sorrendminták helyett a görbék teljes formáját hasonlítani, és a 
   többinél. Figyelem: a csúcs utáni binek az osztályonként eltérő hosszú utólagos rész miatt nem azonos valós időt
   jelentenek.
 
+- Kis-delta kiegészítés (2026-10-10, felhasználói kérés): `large_div` = large_delta - kis-delta (kis = az agresszív
+  volumen a nagy sorozatok nélkül, halmozva); a nagy-görbék csak a napi nagy-küszöb kétszeresét elérő halmozott nagy
+  volumentől kapnak értéket (kb. 2 sorozat; a sorozatszám nincs az adatban). Eredmény: a large_div most is r 0,98-0,99
+  a large_delta-val, mert a kicsik a volumen 86-93%-a, a kis-delta ±0,1 körül marad, a különbséget a nagy-delta adja.
+  Az eltérések kicsik (|d| 0,05-0,15); éjszaka a fordulónál a csúcs előtt több a nagy támadó (forduló - érvénytelenült
+  +0,14…+0,20), RTH-ban a csúcs után a fordulónál gyorsabban fordul a nagy-delta a védők felé. Stabilitás r 0,62-0,91.
+  A kicsik-nagyok szembeállításához skálázni kellene (pl. mindkét delta z-score-ja a csúszó szórásukkal).
+
 ## Nyitott kérdések, következő lépések
 
 - Élő próba NinjaTrader stratégiaként, sim számlán, egy pozícióval, 2026 októberétől.
