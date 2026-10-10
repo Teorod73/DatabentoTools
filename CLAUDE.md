@@ -274,6 +274,14 @@ Cél: a sorrendminták helyett a görbék teljes formáját hasonlítani, és a 
   Érték csak az első nagy sorozattól. Halmozva, mert ritkák (2024 fordulóablakok: a volumen 13,9% / 7,4%-a éjszaka /
   RTH, 8% / 2% ablakban egy sincs; a másodpercek 18% / 8%-ában még nincs érték). A large_delta és a halmozott delta
   korrelációja 0,57 / 0,56.
+- Diagnosztika az új nagy-görbékkel (2026-10-10): a jó - összes eltérés kicsi (|d| 0,05-0,15), az érvénytelenült itt
+  jobban szór (1,2-1,8 x a fordulóé). Stabilitás 2024 / 2025: r 0,49-0,91 (éjszakai large_delta 0,49, kiesik).
+  **A large_div gyakorlatilag azonos a large_delta-val** (r 0,97-0,99): a halmozott delta kicsi (±0,1), a nagy-delta
+  nagyot leng, így a különbséget a nagy-delta adja; a kiegészítés ebben a formában nem ad új információt. A
+  large_delta_post a csúcs után eleinte ±1 (az első nagy sorozat dönt), ezért legalább néhány sorozat kellene. Az
+  éjszakai fordulóknál a csúcs után gyorsabban jönnek vissza a nagy támadók (medián -1 → -0,3 hamarabb), mint a
+  többinél. Figyelem: a csúcs utáni binek az osztályonként eltérő hosszú utólagos rész miatt nem azonos valós időt
+  jelentenek.
 
 ## Nyitott kérdések, következő lépések
 
