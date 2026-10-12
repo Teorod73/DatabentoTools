@@ -364,6 +364,14 @@ nem (az érvénytelenülés 54-62% marad). Új irány: csak szinteknél, a kisö
   érintés előtt megerősítve), `bars15` = az érintés előtti 15. gyertya. A régi T0 (2 x ATR1) kimarad. A napközben
   kialakult kék (0,5) ZigZag-pont aznap már szint (a zzN csoportok = a mai nap + az előző N seansz).
 
+- **Eredmény az érintéses, négy profil-kezdetes változattal** (2026-10-12, `results/sweeps/`, felülírva): összevonva
+  (ismétlődés nélkül) RTH napi 0,7-1,7 kötés, éjszaka 0,4-0,9; a nettó R minden profil-kezdetnél -0,2 és +0,1 között,
+  **a valódi szintek nem jobbak a placebónál** (RTH 2024-ben fractal1/2 3R +0,11-0,12 vs placebó -0,10/-0,02, de 2025-ben
+  -0,10/-0,14, a placebó -0,12/-0,14). Éjszaka a valódi szinteknél magasabb a forduló-arány (2025: 37-45% vs 26-38%,
+  nagy volumennel 48-53% vs 36-44%), de a nettó R 0 körül marad. Csoport x profil-kezdet x cél = 216 konfiguráció közül
+  12 pozitív mindkét évben és jobb a placebónál mindkét évben (kb. a véletlen szintje), mind +0,01…+0,1 R vagy
+  nagyon kevés kötés (night prev_va 7-19 / év). Nincs igazolt előny ár / volumen alapon.
+
 ## Nyitott kérdések, következő lépések
 
 - Élő próba NinjaTrader stratégiaként, sim számlán, egy pozícióval, 2026 októberétől.
