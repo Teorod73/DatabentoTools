@@ -348,6 +348,15 @@ nem (az érvénytelenülés 54-62% marad). Új irány: csak szinteknél, a kisö
   talált eseményablakokra (a felhasználó futtatja); (3) MBO-feltételek egyenként. 2024-en választás, 2025 csak
   részben független (a zónákat és a volumen-hatást már láttuk), a tiszta próba az élő adat.
 
+- **1. lépés eredménye** (2026-10-12, ResearchData `results/sweeps/`, közelség 0,5 x ATR1): 13 964 közeledés, ebből
+  2984 kötés (21%; a többinél nem alakult ki a szint közelében HVN, vagy nem zárt alá). Csoportonként kevés kötés
+  (0,01-0,4 / nap, csoportonként 2-110 / év), a sávok ±0,2-1,0 R. **Egyik csoport sem jobb következetesen a placebónál
+  (eltolt szintek), és egyik sem pozitív mindkét évben**; a nagy-volumen szűrő sem javít. Összevonva (ismétlődések
+  nélkül): RTH valódi 2024 -0,01 / +0,10 / +0,19 R, 2025 -0,05 / -0,18 / -0,18; placebó -0,08 / 0,00 / +0,05 és
+  -0,03 / -0,01 / -0,05; éjszaka valódi 2024 -0,27 / -0,11 / -0,14, 2025 +0,03 / +0,01 / +0,14, placebó hasonló. A
+  forduló-arány 15-26% a valódinál és a placebónál is (a HVN alatti zárás geometriája adja, nem a szint). Kockázat
+  medián 1,4-1,6 x ATR1, 1R-es nyerési arány kb. 50%.
+
 ## Nyitott kérdések, következő lépések
 
 - Élő próba NinjaTrader stratégiaként, sim számlán, egy pozícióval, 2026 októberétől.
