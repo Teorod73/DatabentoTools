@@ -81,3 +81,9 @@ HVN min asymmetry 0.8, max overshoot 0.25, forgalommal súlyozva, a besorolás a
   kereskedés nélkül. Sablonok a másik évből; a csúcs utáni rész a nyújtási rácson (L = r x csúcs előtti hossz), csak
   teljes binek; pontszám = távolság(összes) - min(távolság(forduló), távolság(lezárult)); A = orderflow, B = ár,
   C = átlag; a megerősítéskor és +30 / +60 / +120 s-nál. Kimenet: `scores.csv.gz`, `auc.csv`, `summary.md`.
+- `sweep_study.py <resultsDir> <researchDataDir> <outDir> [lastSession] [proximity]`: szint-kisöprés helyi HVN-nel,
+  1. lépés (ár és volumen). Hét szintcsoport (előző seansz High/Low, VAH/VAL, HVN; éjszakai High/Low és VAH/VAL 09:30
+  után; 0,5-ös ZigZag-pontok 1/5/10/15 seanszra visszamenőleg; előző heti High/Low), csak érintetlen szintek. A szint
+  közelében (0,5 x ATR1) a helyi profil (T0-tól, Sigma Multiplier 0,41) felső HVN-je; belépés a HVN alsó széle alatti
+  záráson, short (Low-nál tükrözve), stop a szélsőérték + 2 tick, 1R / 2R / 3R, 60 perc. Placebó: eltolt szintek.
+  Kimenet: `events.csv.gz`, `summary.md`.

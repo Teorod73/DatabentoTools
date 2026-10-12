@@ -329,10 +329,9 @@ nem (az érvénytelenülés 54-62% marad). Új irány: csak szinteknél, a kisö
   Prominence-algoritmussal (`profiles.prominence_clusters`), **Sigma Multiplier 0,41** (a helyi profilhoz; a
   seansz-szintek a NinjaTraderrel egyeztetett 0,25-tel maradnak), felülről az első HVN. Közelség: a HVN sávja
   legfeljebb 0,5 x ATR1-re van a szinttől (vagy átfedi); később 0,25 / 1,0 x ATR1-gyel is.
-- **Nagy forgalom:** (a) az esemény relatív volumene (a belépő gyertyától a megerősítésig a perces volumen / ugyanazon
-  napszak előző 20 seanszának mediánja, ahogy a jelölteknél mértük); (b) a HVN-é: a HVN-sáv volumene / az előző 20
-  seansz azonos ülésszakában talált ugyanilyen HVN-ek átlagos volumene (a szint-HVN-eknél a seansz-profilok HVN-jei,
-  a helyi HVN-nél az előző eseményeké). Küszöb: a 2024-es legfelső ötöd, előre rögzítve.
+- **Nagy forgalom:** az esemény relatív volumene (T0-tól a belépésig a perces volumen / ugyanazon napszak előző 20
+  seanszának mediánja, ahogy a jelölteknél mértük), küszöb a 2024-es jelöltek legfelső ötöde (éjszaka 2,04, RTH 1,84).
+  A HVN volumenének külön vizsgálata kimarad (felhasználói döntés: ha a profilban HVN alakul ki, az már elég volumen).
 - **Belépés:** zárás a helyi HVN alsó széle alatt (új csúcs nélkül). MBO-feltételek **egyenként hozzáadva**, mindegyik
   hozzájárulását mérve: először bid oldal (att_refill alacsony, att_cancel magas), aztán ask oldal (def_refill magas,
   def_cancel alacsony), végül delta negatív és def_eff magas; csúszó küszöbök az előző 60 napból.
@@ -340,6 +339,11 @@ nem (az érvénytelenülés 54-62% marad). Új irány: csak szinteknél, a kisö
   1R / 2R / 3R; 60 perc; költségek mint eddig.
 - **Összevetés:** eltolt (hamis) szintek ±0,1-0,5 ATR (placebó), szint nélküli nagy volumenű jelöltek, és ugyanaz
   volumen-feltétel nélkül. Mérni: forduló-arány (arany / kék), stop-arány, nettó R célonként, kötésszám.
+- 1. lépés kódja: `research/sweep_study.py` (ResearchData `results/sweeps/`). Esemény: az első gyertya, amely a szinttől
+  0,5 x ATR1-re ér (az érintetlen oldalról); T0 mint a jelölt-ablakoknál; a helyi profil T0-tól az előző gyertyáig,
+  percenként; belépés az első zárás a HVN alsó széle alatt; az esemény 120 gyertya után vagy 2 x ATR1-es eltávolodáskor
+  véget ér; szintenként és oldalanként seanszonként egy esemény. Placebó: a seansz minden szintje ±0,1-0,5 napi ATR-rel
+  eltolva.
 - **Sorrend:** (1) szintek + helyi HVN + zárás alatta, csak ár / volumen adatból; (2) C# `pivots` futtatás az így
   talált eseményablakokra (a felhasználó futtatja); (3) MBO-feltételek egyenként. 2024-en választás, 2025 csak
   részben független (a zónákat és a volumen-hatást már láttuk), a tiszta próba az élő adat.
