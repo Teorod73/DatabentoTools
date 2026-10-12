@@ -357,6 +357,13 @@ nem (az érvénytelenülés 54-62% marad). Új irány: csak szinteknél, a kisö
   forduló-arány 15-26% a valódinál és a placebónál is (a HVN alatti zárás geometriája adja, nem a szint). Kockázat
   medián 1,4-1,6 x ATR1, 1R-es nyerési arány kb. 50%.
 
+- **Módosítás (2026-10-12, felhasználói döntés):** az esemény a szint **érintésénél** kezdődik (nem 0,5 x ATR1-re
+  előtte; a helyi HVN közelségi tűrése 0,5 x ATR1 marad). A profil kezdete négy változatban (`start_mode`):
+  `fractal1` / `fractal2` = az utolsó FractalLow(1) / (2) az érintés előtt (egy Low, amely mellett mindkét oldalon 1 / 2
+  gyertya Low-ja magasabb; az érintés előtti gyertyáig megerősítve), `zz015` = az utolsó 0,15-ös ZigZag Low (az
+  érintés előtt megerősítve), `bars15` = az érintés előtti 15. gyertya. A régi T0 (2 x ATR1) kimarad. A napközben
+  kialakult kék (0,5) ZigZag-pont aznap már szint (a zzN csoportok = a mai nap + az előző N seansz).
+
 ## Nyitott kérdések, következő lépések
 
 - Élő próba NinjaTrader stratégiaként, sim számlán, egy pozícióval, 2026 októberétől.

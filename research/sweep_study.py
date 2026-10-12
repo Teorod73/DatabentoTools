@@ -8,15 +8,18 @@ Written for a high (short), a low is mirrored. Reference levels, every group eva
     prev_hvn   previous session HVNs (zones; the near edge is the level)
     on_hl      today's 20:00-09:30 profile high / low, from 09:30
     on_va      today's 20:00-09:30 profile VAH / VAL, from 09:30
-    zzN        0.5 ZigZag highs / lows of the previous N sessions (N = 1, 5, 10, 15), from their confirmation
+    zzN        0.5 ZigZag highs / lows of today and the previous N sessions (N = 1, 5, 10, 15), from their
+               confirmation
     week_hl    previous week (Sunday 18:00 - Friday 17:00) high / low
 Older contract levels are shifted by the roll spread. A level is a short setup while nothing traded above it since
 it is known (the session end for the previous session levels, 09:30 for the overnight ones, the confirmation for a
 ZigZag point, the week end for the week); a long setup while nothing traded below it.
 
-Event: a bar comes within PROXIMITY x ATR1 of an untouched level (ATR1 = 1 minute ATR(20) of the bar before). T0 is
-the bar after the last bar whose high was 2 x ATR1 below that bar's high (as the candidate windows). From then on the
-local volume profile of T0 .. the previous bar (front contract, traded prices, Prominence HVNs with Sigma Multiplier
+Event: a bar touches an untouched level (ATR1 = 1 minute ATR(20) of the bar before). The local profile starts at
+(START_MODES, each a separate event): fractal1 / fractal2 = the last FractalLow(1) / (2) before the touch (a low with
+higher lows on 1 / 2 bars on both sides, confirmed before the touch bar), zz015 = the last 0.15 ZigZag low confirmed
+before the touch bar, bars15 = the 15th bar before the touch. From then on the local volume profile of T0 .. the
+previous bar (front contract, traded prices, Prominence HVNs with Sigma Multiplier
 0.41) is taken every minute: the highest HVN whose band is within PROXIMITY x ATR1 of the level (or overlaps it).
 Entry: the first bar that closes below the low edge of that HVN. The event ends without a trade when the price moves
 2 x ATR1 away below the level, after MAX_EVENT bars or at the session end; one event per level and side per session.
@@ -52,6 +55,7 @@ AWAY = 2.0
 MAX_EVENT = 120
 LOOKBACK = 240
 LOOKBACKS = (1, 5, 10, 15)
+START_MODES = ("fractal1", "fractal2", "zz015", "bars15")
 HIGH_VOLUME = {"night": 2.04, "rth": 1.84}
 SETTINGS = pf.Settings(sigma_multiplier=0.41)
 RNG = np.random.default_rng(20261012)
@@ -166,16 +170,38 @@ def main(results: str, data: str, out: str, last_session: str = "2025-12-31", pr
         sg = -1 if side == 1 else 1
         hx, lx, cx = (high, low, close) if side == -1 else (-low, -high, -close)
         lev = level * sg
-        near = hx[start:g_last + 1] >= lev - proximity * atr1[start - 1:g_last]
-        i0 = start + int(np.argmax(near)) if near.any() else None
+        touch = hx[start:g_last + 1] >= lev
+        i0 = start + int(np.argmax(touch)) if touch.any() else None
         if i0 is None or i0 == start:
-            return None                                   # never approached, or not from the untouched side
+            return []                                     # never touched, or not from the untouched side
         a0 = atr1[i0 - 1]
-        k = i0 - 1
+        out = []
+        for mode in START_MODES:
+            t0 = profile_start(mode, side, i0, g_first)
+            if t0 is not None:
+                out.append(event(side, sg, hx, cx, lev, level, i0, t0, a0, g_last, {**info, "start_mode": mode}, rows))
+        return out
+
+    def profile_start(mode, side, i0, g_first):
+        """The first bar of the local profile (only bars known before the touch bar)."""
         floor = max(g_first, i0 - LOOKBACK)
-        while k >= floor and hx[k] >= hx[i0] - AWAY * a0:
-            k -= 1
-        t0 = k + 1
+        if mode == "bars15":
+            return max(g_first, i0 - 15)
+        if mode in ("fractal1", "fractal2"):
+            n = 1 if mode == "fractal1" else 2
+            frac = (frac_low if side == -1 else frac_high)[n]
+            for k in range(i0 - 1 - n, floor + n - 1, -1):
+                if frac[k]:
+                    return k
+            return None
+        # the last 0.15 ZigZag low (high at a low) confirmed before the touch bar
+        conf, at = zz15_low if side == -1 else zz15_high
+        j = np.searchsorted(conf, i0 - 1, side="right") - 1
+        if j < 0:
+            return None
+        return max(int(at[j]), g_first)
+
+    def event(side, sg, hx, cx, lev, level, i0, t0, a0, g_last, info, rows):
         um = rows.utc_minute.to_numpy(np.int64)
         ticks = np.round(rows.price.to_numpy(float) * sg / TICK).astype(np.int64)
         rv = rows.volume.to_numpy(float)
@@ -227,6 +253,21 @@ def main(results: str, data: str, out: str, last_session: str = "2025-12-31", pr
         rec.update(pt.simulate(sb.sort_values("utc_second"), side, entry, stop))
         return rec
 
+    # fractals: a low with higher lows on both sides (1 or 2 bars), a high mirrored; within one contract
+    frac_low, frac_high = {}, {}
+    for n in (1, 2):
+        fl = np.zeros(len(b), bool)
+        fh = np.zeros(len(b), bool)
+        for k in range(n, len(b) - n):
+            if symbol[k - n] != symbol[k + n]:
+                continue
+            fl[k] = all(low[k] < low[k - j] and low[k] < low[k + j] for j in range(1, n + 1))
+            fh[k] = all(high[k] > high[k - j] and high[k] > high[k + j] for j in range(1, n + 1))
+        frac_low[n], frac_high[n] = fl, fh
+    zz15 = zz.swings(b, zz.ZigZagSettings(multipliers=(0.15,))).sort_values("confirm_index")
+    zz15_low = tuple(zz15[zz15.type == "low"][c].to_numpy() for c in ("confirm_index", "index"))
+    zz15_high = tuple(zz15[zz15.type == "high"][c].to_numpy() for c in ("confirm_index", "index"))
+
     for si, session in enumerate(session_list):
         if session not in first.index or si == 0:
             continue
@@ -258,7 +299,7 @@ def main(results: str, data: str, out: str, last_session: str = "2025-12-31", pr
                     lv += [("on_hl", "onh", ohi, ohi, open_bar), ("on_hl", "onl", olo, olo, open_bar),
                            ("on_va", "on_vah", ovah, ovah, open_bar), ("on_va", "on_val", oval, oval, open_bar)]
         for n in LOOKBACKS:
-            back = session_list[max(0, si - n):si]
+            back = session_list[max(0, si - n):si + 1]          # the previous n sessions and today
             sw = zz05[zz05.session.isin(back) & (zz05.confirm_index <= g_last)]
             for _, s in sw.iterrows():
                 sh = shift_between(s.session, session)
@@ -290,9 +331,7 @@ def main(results: str, data: str, out: str, last_session: str = "2025-12-31", pr
                             continue
                     info = {"session": session.date(), "year": session.year, "baseline": baseline, "group": group,
                             "name": name, "zone_low": zlo, "zone_high": zhi, "atr": st.atr}
-                    rec = scan(side, level, start, g_first, g_last, info, rows)
-                    if rec is not None:
-                        records.append(rec)
+                    records.extend(scan(side, level, start, g_first, g_last, info, rows))
         if si % 25 == 0:
             print(f"{session.date()} {len(records)} events, {time.time() - started:.0f} s", flush=True)
 
@@ -306,35 +345,51 @@ def main(results: str, data: str, out: str, last_session: str = "2025-12-31", pr
 
 def summary(df: pd.DataFrame, proximity: float, n_sessions: dict) -> str:
     lines = ["# Szint-kisöprés helyi HVN-nel (1. lépés, ár és volumen)", "",
-             f"Közelség {proximity} x ATR1, Sigma Multiplier {SETTINGS.sigma_multiplier}. Kötés: short a HVN alsó széle "
-             "alatti záráson (Low tükrözve), stop a szélsőérték + 2 tick, kockázat ≤ 2 x ATR1, 60 perc. Nettó R ± 95% "
-             "(seanszonként klaszterezve). forduló = a stop-szélsőérték gyertyája 0,3 vagy 0,5 ZigZag-pont, kék = 0,5. "
-             "stop = 60 percen belül ütött. placebó = a szintek véletlenül eltolva (±0,1-0,5 napi ATR). nagy volumen = "
-             "a T0-tól a belépésig mért relatív volumen a 2024-es jelöltek legfelső ötöde fölött.", ""]
+             f"Esemény a szint érintésétől; a helyi HVN legfeljebb {proximity} x ATR1-re a szinttől; Sigma Multiplier "
+             f"{SETTINGS.sigma_multiplier}. A profil kezdete: fractal1 / fractal2 (az utolsó FractalLow(1) / (2) az "
+             "érintés előtt), zz015 (az utolsó 0,15-ös ZigZag Low), bars15 (az érintés előtti 15. gyertya). Kötés: short "
+             "a HVN alsó széle alatti záráson (Low tükrözve), stop a szélsőérték + 2 tick, kockázat ≤ 2 x ATR1, 60 perc. "
+             "Nettó R ± 95% (seanszonként klaszterezve). forduló = a stop-szélsőérték gyertyája 0,3 vagy 0,5 ZigZag-pont, "
+             "kék = 0,5. stop = 60 percen belül ütött. placebó = a szintek véletlenül eltolva (±0,1-0,5 napi ATR). nagy "
+             "volumen = a T0-tól a belépésig mért relatív volumen a 2024-es jelöltek legfelső ötöde fölött.", ""]
     t = df[df.traded.fillna(False).astype(bool)].copy()
     t["weight"] = 1.0
     t["pivot"] = t.pivot03.astype(bool) | t.pivot05.astype(bool)
     t["stopped"] = t.mae_r >= 1
+
+    def row(g, label):
+        cells = []
+        for k in pt.TARGETS:
+            m, band = pt.weighted(g, f"r{k}")
+            cells.append(f"{m:+.2f} ±{band:.2f}")
+        y = int(g.year.iloc[0])
+        return (f"| {label} | {len(g)} | {len(g) / n_sessions.get(y, 1):.2f} | {g['pivot'].mean():.0%} | "
+                f"{g.pivot05.astype(bool).mean():.0%} | {g.stopped.mean():.0%} | " + " | ".join(cells) + " |")
+
+    head = "| {} | kötés | / nap | forduló | kék | stop | 1R | 2R | 3R |"
     for part in ("night", "rth"):
-        lines += [f"## {'Éjszaka' if part == 'night' else 'RTH'}", "",
-                  "| csoport | volumen | év | szint | kötés | / nap | forduló | kék | stop | 1R | 2R | 3R |",
-                  "|---|---|---|---|---|---|---|---|---|---|---|---|"]
-        for group in GROUPS:
-            for vol_name, vol_mask in (("mind", None), ("nagy", True)):
-                for year in sorted(t.year.unique()):
+        p = t[t.part == part]
+        lines += [f"## {'Éjszaka' if part == 'night' else 'RTH'}", "", "Összevonva (minden csoport, ismétlődés nélkül):", "",
+                  head.format("profil-kezdet / volumen / év / szint"), "|---|---|---|---|---|---|---|---|---|"]
+        for mode in START_MODES:
+            for vol in ("mind", "nagy"):
+                for year in sorted(p.year.unique()):
                     for baseline in (False, True):
-                        g = t[(t.part == part) & (t.group == group) & (t.year == year) & (t.baseline == baseline)]
-                        if vol_mask:
+                        g = p[(p.start_mode == mode) & (p.year == year) & (p.baseline == baseline)]
+                        if vol == "nagy":
                             g = g[g.high_volume.astype(bool)]
-                        if g.empty:
-                            continue
-                        cells = []
-                        for k in pt.TARGETS:
-                            m, band = pt.weighted(g, f"r{k}")
-                            cells.append(f"{m:+.2f} ±{band:.2f}")
-                        lines.append(f"| {group} | {vol_name} | {year} | {'placebó' if baseline else 'valódi'} | "
-                                     f"{len(g)} | {len(g) / n_sessions.get(year, 1):.2f} | {g["pivot"].mean():.0%} | "
-                                     f"{g.pivot05.astype(bool).mean():.0%} | {g.stopped.mean():.0%} | " + " | ".join(cells) + " |")
+                        g = g.drop_duplicates(["session", "side", "entry_minute"])
+                        if len(g):
+                            lines.append(row(g, f"{mode} / {vol} / {year} / {'placebó' if baseline else 'valódi'}"))
+        lines += ["", "Csoportonként (minden volumen):", "", head.format("csoport / profil-kezdet / év / szint"),
+                  "|---|---|---|---|---|---|---|---|---|"]
+        for group in GROUPS:
+            for mode in START_MODES:
+                for year in sorted(p.year.unique()):
+                    for baseline in (False, True):
+                        g = p[(p.group == group) & (p.start_mode == mode) & (p.year == year) & (p.baseline == baseline)]
+                        if len(g):
+                            lines.append(row(g, f"{group} / {mode} / {year} / {'placebó' if baseline else 'valódi'}"))
         lines.append("")
     return "\n".join(lines) + "\n"
 
