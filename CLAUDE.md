@@ -310,6 +310,40 @@ Cél: a sorrendminták helyett a görbék teljes formáját hasonlítani, és a 
   ZigZag-küszöbhöz képest nagy); a hatékonyság fordítva (0,36-0,48). A forduló - lezárult különbség viszont
   gazdaságilag kevés, mert mindkettő jó short.
 
+## Szint-kisöprés helyi HVN-nel (terv, 2026-10-12, a felhasználóval egyeztetve, az eredmények előtt)
+
+A sablonillesztés lezárva (AUC 0,53-0,59). Tanulság: az orderflow hely nélkül gyenge; a volumen a mozgás méretét
+jelzi (a legfelső relatív-volumen ötödben a forduló-arány 16-18% az 5,7-6,8% helyett, 40-48%-uk kék is), az irányt
+nem (az érvénytelenülés 54-62% marad). Új irány: csak szinteknél, a kisöprés helyi profillal. High-ra leírva, Low tükrözve.
+
+- **Referenciaszintek, 7 csoport, külön-külön értékelve** (melyik hatékony, melyik dobható):
+  1. előző seansz (18:00-17:00) profil High / Low; 2. előző seansz VAH / VAL; 3. előző seansz HVN-jei;
+  4. aznapi 20:00-09:30 profil High / Low (09:30 után); 5. aznapi 20:00-09:30 profil VAH / VAL (09:30 után);
+  6. múltbeli 0,5-ös ZigZag High / Low-k 1, 5, 10, 15 kereskedési napra visszamenőleg (a legjobb visszatekintés
+  teszttel; 4 változat); 7. előző heti High / Low (vasárnap 18:00 - péntek 17:00).
+  Az átfedő szinteket jelölni (konfluencia), hogy egy esemény ne számítson kétszer.
+- **Érintetlenség:** a szint fölött (Low-nál alatta) egyáltalán nem volt kereskedés, amióta a szint ismert (előző
+  napi szint: a seansz végétől; éjszakai: 09:30-tól; ZigZag-pont: a megerősítésétől; heti: a hét végétől).
+- **Helyi profil:** a mozgás kezdetétől (elsődleges: a jelölt-ablak T0-ja, az utolsó gyertya a csúcs - 2 x ATR1 alatt;
+  egy változat: a legutóbbi megerősített 0,1-es ZigZag Low) percenként frissítve, tickenként. HVN a meglévő
+  Prominence-algoritmussal (`profiles.prominence_clusters`), **Sigma Multiplier 0,41** (a helyi profilhoz; a
+  seansz-szintek a NinjaTraderrel egyeztetett 0,25-tel maradnak), felülről az első HVN. Közelség: a HVN sávja
+  legfeljebb 0,5 x ATR1-re van a szinttől (vagy átfedi); később 0,25 / 1,0 x ATR1-gyel is.
+- **Nagy forgalom:** (a) az esemény relatív volumene (a belépő gyertyától a megerősítésig a perces volumen / ugyanazon
+  napszak előző 20 seanszának mediánja, ahogy a jelölteknél mértük); (b) a HVN-é: a HVN-sáv volumene / az előző 20
+  seansz azonos ülésszakában talált ugyanilyen HVN-ek átlagos volumene (a szint-HVN-eknél a seansz-profilok HVN-jei,
+  a helyi HVN-nél az előző eseményeké). Küszöb: a 2024-es legfelső ötöd, előre rögzítve.
+- **Belépés:** zárás a helyi HVN alsó széle alatt (új csúcs nélkül). MBO-feltételek **egyenként hozzáadva**, mindegyik
+  hozzájárulását mérve: először bid oldal (att_refill alacsony, att_cancel magas), aztán ask oldal (def_refill magas,
+  def_cancel alacsony), végül delta negatív és def_eff magas; csúszó küszöbök az előző 60 napból.
+- **Kötés:** short a záráson; stop a kisöprés csúcsa (HVN teteje, ha magasabb) + 2 tick; kockázat ≤ 2 x ATR1;
+  1R / 2R / 3R; 60 perc; költségek mint eddig.
+- **Összevetés:** eltolt (hamis) szintek ±0,1-0,5 ATR (placebó), szint nélküli nagy volumenű jelöltek, és ugyanaz
+  volumen-feltétel nélkül. Mérni: forduló-arány (arany / kék), stop-arány, nettó R célonként, kötésszám.
+- **Sorrend:** (1) szintek + helyi HVN + zárás alatta, csak ár / volumen adatból; (2) C# `pivots` futtatás az így
+  talált eseményablakokra (a felhasználó futtatja); (3) MBO-feltételek egyenként. 2024-en választás, 2025 csak
+  részben független (a zónákat és a volumen-hatást már láttuk), a tiszta próba az élő adat.
+
 ## Nyitott kérdések, következő lépések
 
 - Élő próba NinjaTrader stratégiaként, sim számlán, egy pozícióval, 2026 októberétől.
