@@ -424,11 +424,11 @@ High-ra leírva, Low tükrözve:
 ## Nyitott kérdések, következő lépések
 
 - **NinjaTrader-változat (2026-10-13):** Custom `Strategies/BlueSweepStrategy.cs`, a módosított nyers szabály virtuális
-  kötésekkel (nem küld megbízást): saját 1 perces gyertyák és profilok egy hozzáadott 1 tickes sorozatból, ZigZagAtr-logika
-  (0,5), a HVN a VolumeProfileTool-sablon beállításaival (Prominence, Sigma 0,41 kell), OnRenderben rajzolt kék ZigZag,
+  kötésekkel (nem küld megbízást): gyertyák, seanszok és ZigZag egy hozzáadott 1 perces sorozatból (mint a ZigZagAtr,
+  a kék pontok egyeznek vele), a profilok egy 1 tickes sorozatból, ZigZagAtr-logika (0,5), a HVN a VolumeProfileTool-sablon beállításaival (Prominence, Sigma 0,41 kell), OnRenderben rajzolt kék ZigZag,
   profilok és a 4 változat belépés → kilépés vonala, Output: érintések, belépések, kilépések, éjszaka / RTH statisztika.
   Eltérések a Pythontól: nincs roll spread eltolás (a NinjaTrader merge policy-ja dönt), a profil hézagsorai (0 volumen) a
-  NinjaTraderben benne vannak a simításban. Még nincs lefordítva / összevetve a Python kötéslistával.
+  NinjaTraderben benne vannak a simításban. Lefordítva; a Python kötéslistával még nincs összevetve.
 
 - **FlowCurves indikátor (2026-10-13):** Custom `Indicators/GM/FlowCurves.cs` (+ `AddOns/GM/Helpers/FlowCurveCalculator.cs`,
   `Enums/FlowCurveEnums.cs`): a kutatás orderflow-görbéi (delta, cancel, refill, hidden, hatékonyság, balansz, volumen,
