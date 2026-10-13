@@ -87,6 +87,14 @@ HVN min asymmetry 0.8, max overshoot 0.25, forgalommal súlyozva, a besorolás a
   közelében (0,5 x ATR1) a helyi profil (T0-tól, Sigma Multiplier 0,41) felső HVN-je; belépés a HVN alsó széle alatti
   záráson, short (Low-nál tükrözve), stop a szélsőérték + 2 tick, 1R / 2R / 3R, 60 perc. Placebó: eltolt szintek.
   Kimenet: `events.csv.gz`, `summary.md`.
+- `flow_windows.py <resultsDir> <researchDataDir>`: a NinjaTrader FlowCurves indikátor (Custom
+  `Indicators/GM/FlowCurves.cs`) ablakai. `results/blue_sweep/blue_events.csv`: a kék kisöprés folyamatai a
+  `DatabentoExtract pivots` bemenetének (a profil kezdetétől, az érintés előtti 14. gyertyától a folyamat végéig, a sáv
+  az első gyertya nyitójára középre igazítva, a folyamat szélsőértéke + 20 tick; a kimenet a ResearchData `blue/`
+  mappájába kerül, nincs a gitben). `results/flow/windows.csv`: az összes orderflow-adatos ablak (forduló, 10%-os
+  jelöltminta, kék kisöprés) a görbékhez szükséges adatokkal; `results/flow/norms.csv`: a térfogat- és a hatékonysági
+  N napszakonként (a 2024-es fordulóablakokból, mint `pattern_trades.norms`). Az indikátor C# számolása
+  (`FlowCurveCalculator`) gépi pontossággal egyezik a `pivot_curves.curves` értékeivel.
 - `blue_sweep.py <resultsDir> <researchDataDir> <outDir> [firstSession] [lastSession]`: kék (0,5-ös) ZigZag-pontok
   kisöprése helyi profillal, a nyers szabály (CLAUDE.md, „Kék ZigZag-kisöprés”). Élő pontok érintésekor folyamat
   (egyszerre egy, az új felváltja), profil az érintés előtti 14. gyertyától a záró gyertyával együtt, jelzés a

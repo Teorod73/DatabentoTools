@@ -430,6 +430,13 @@ High-ra leírva, Low tükrözve:
   Eltérések a Pythontól: nincs roll spread eltolás (a NinjaTrader merge policy-ja dönt), a profil hézagsorai (0 volumen) a
   NinjaTraderben benne vannak a simításban. Még nincs lefordítva / összevetve a Python kötéslistával.
 
+- **FlowCurves indikátor (2026-10-13):** Custom `Indicators/GM/FlowCurves.cs` (+ `AddOns/GM/Helpers/FlowCurveCalculator.cs`,
+  `Enums/FlowCurveEnums.cs`): a kutatás orderflow-görbéi (delta, cancel, refill, hidden, hatékonyság, balansz, volumen,
+  nagy-delta), legördülőből választva, külön panelen, csak az ablakokban (forduló, jelöltminta, kék kisöprés), a
+  `DatabentoExtract pivots` fájljaiból, támadó / védő tükrözéssel. A C# számolás a Python `pivot_curves.curves`-zel
+  gépi pontossággal egyezik (2 nap, minden görbe). Ablakok és normák: `research/flow_windows.py` → ResearchData
+  `results/flow/`. A kék kisöprés ablakaihoz a felhasználónak le kell futtatnia a `pivots`-ot a
+  `results/blue_sweep/blue_events.csv`-re (kimenet ResearchData `blue/`, kb. 1 GB, gitignore).
 - Élő próba NinjaTrader stratégiaként, sim számlán, egy pozícióval, 2026 októberétől.
 - Gond: a NinjaTrader Level 2 csak ~10 árszintet ad, a sáv 21–45 tick is lehet, a C# viszont teljes MBO könyvből
   számolt. Dönteni kell: mélyebb adatforrás, vagy a jellemzők átdefiniálása a látható szintekre (ez új szabály,
