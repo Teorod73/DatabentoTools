@@ -423,6 +423,13 @@ High-ra leírva, Low tükrözve:
 
 ## Nyitott kérdések, következő lépések
 
+- **NinjaTrader-változat (2026-10-13):** Custom `Strategies/BlueSweepStrategy.cs`, a módosított nyers szabály virtuális
+  kötésekkel (nem küld megbízást): saját 1 perces gyertyák és profilok egy hozzáadott 1 tickes sorozatból, ZigZagAtr-logika
+  (0,5), a HVN a VolumeProfileTool-sablon beállításaival (Prominence, Sigma 0,41 kell), OnRenderben rajzolt kék ZigZag,
+  profilok és a 4 változat belépés → kilépés vonala, Output: érintések, belépések, kilépések, éjszaka / RTH statisztika.
+  Eltérések a Pythontól: nincs roll spread eltolás (a NinjaTrader merge policy-ja dönt), a profil hézagsorai (0 volumen) a
+  NinjaTraderben benne vannak a simításban. Még nincs lefordítva / összevetve a Python kötéslistával.
+
 - Élő próba NinjaTrader stratégiaként, sim számlán, egy pozícióval, 2026 októberétől.
 - Gond: a NinjaTrader Level 2 csak ~10 árszintet ad, a sáv 21–45 tick is lehet, a C# viszont teljes MBO könyvből
   számolt. Dönteni kell: mélyebb adatforrás, vagy a jellemzők átdefiniálása a látható szintekre (ez új szabály,
