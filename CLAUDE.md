@@ -372,6 +372,30 @@ nem (az érvénytelenülés 54-62% marad). Új irány: csak szinteknél, a kisö
   12 pozitív mindkét évben és jobb a placebónál mindkét évben (kb. a véletlen szintje), mind +0,01…+0,1 R vagy
   nagyon kevés kötés (night prev_va 7-19 / év). Nincs igazolt előny ár / volumen alapon.
 
+## Kék ZigZag-kisöprés (egyszerűsített szabály, 2026-10-13, a felhasználó döntése)
+
+Csak ár / volumen, a nyers szabály; később MBO-szűrők (refill, cancel stb.), GARCH és autokorreláció. **Fejlesztés
+2024-2025-ön, a szabály rögzítése után egyszeri próba 2026-01-01 - 10-04-en** (a 2026 a zóna-szabály holdoutjaként már
+egyszer szerepelt, erre a stratégiára még nem; nem teljesen „tiszta”, de egyszeri futtatással elfogadható).
+High-ra leírva, Low tükrözve:
+
+- **Szintek:** csak a 0,5-ös (kék) ZigZag High / Low pontok. Élő a megerősítésétől, amíg a High fölött (Low alatt)
+  nem kereskedtek; minden régi pont él (roll spreaddel eltolva), a kor (seansz) eltárolva, a visszatekintést
+  utólagos statisztika dönti el.
+- **Folyamat:** egy élő High érintésekor indul. Profil az érintés előtti 15. gyertyától, gyertyánként bővül
+  (Sigma 0,41). Belépés: az első lezárt gyertya, amely a legfelső HVN alsó széle alatt zár (a profil az előző
+  gyertyáig) → short a záráson. Utána a jelzés szünetel, amíg egy lezárt gyertya **High-ja** a profil eddigi High-ja
+  fölé nem megy; akkor újra él, és a következő alázárásnál: ha a pozíció él, nem csinálunk semmit, ha kiütötte a
+  stop, új short. (A profil közben is a kezdettől az aktuális gyertyáig tart, csak a jelzés szünetel.)
+- **Stop:** az eddigi legmagasabb High + 5 tick, nem mozdul; a kiütött stopok mérése miatt 10 / 15 / 20 tickkel is.
+- **Cél (mind párhuzamosan mérve):** 1R / 2R / 3R, a legközelebbi ellentétes élő kék pont, vagy nincs cél.
+  **Legkésőbb 16:00 ET zárás mindenképpen.** Költség: stopnál 1 tick csúszás, 0,08 pont jutalék.
+- **A folyamat vége:** az ár a szinttől felfelé vagy lefelé eltávolodik a 20 napos átlagos ATR1 tízszeresével
+  (külön átlag a 20:00-09:30 és a 09:30-16:00 részre), elér egy másik élő kék pontot (az lesz az új folyamat, a
+  régi leáll; egyszerre csak egy folyamat, mindig az új), vagy 16:00. A nyitott pozíció a saját kiszállásáig marad.
+- Kereskedés 20:00-16:00 ET (18:00-20:00 és 16:00-18:00 nincs). Mérni: a szint kora, a várakozás (érintéstől a
+  belépésig, a szinttől való távolság az átlag-ATR1 egységében), hányadik belépés a folyamatban.
+
 ## Nyitott kérdések, következő lépések
 
 - Élő próba NinjaTrader stratégiaként, sim számlán, egy pozícióval, 2026 októberétől.

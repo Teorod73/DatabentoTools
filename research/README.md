@@ -87,3 +87,10 @@ HVN min asymmetry 0.8, max overshoot 0.25, forgalommal súlyozva, a besorolás a
   közelében (0,5 x ATR1) a helyi profil (T0-tól, Sigma Multiplier 0,41) felső HVN-je; belépés a HVN alsó széle alatti
   záráson, short (Low-nál tükrözve), stop a szélsőérték + 2 tick, 1R / 2R / 3R, 60 perc. Placebó: eltolt szintek.
   Kimenet: `events.csv.gz`, `summary.md`.
+- `blue_sweep.py <resultsDir> <researchDataDir> <outDir> [firstSession] [lastSession]`: kék (0,5-ös) ZigZag-pontok
+  kisöprése helyi profillal, a nyers szabály (CLAUDE.md, „Kék ZigZag-kisöprés”). Élő pontok érintésekor folyamat
+  (egyszerre egy, az új felváltja), profil az érintés előtti 15. gyertyától, belépés a legfelső HVN alsó széle alatti
+  záráson, újrabelépés a stop után egy új csúcs és újabb alázárás esetén; stop a szélsőérték + 5 / 10 / 15 / 20 tick,
+  cél 1R / 2R / 3R / a legközelebbi ellentétes élő kék pont / nincs, zárás legkésőbb 16:00. Kimenet: `trades.csv.gz`
+  (kötésenként és beállításonként), `summary.md`.
+
