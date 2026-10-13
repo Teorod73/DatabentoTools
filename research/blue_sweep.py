@@ -46,6 +46,7 @@ ATR_SESSIONS = 20
 COMMISSION = 0.08
 SETTINGS = pf.Settings(sigma_multiplier=0.41)
 NIGHT_START, CASH_OPEN, CLOSE = 20 * 60, 9 * 60 + 30, 16 * 60
+TRACE: list | None = None               # set to a list to record every bar of every process (for drawings)
 
 
 def part_of(minute_of_day: int) -> str:
@@ -174,7 +175,14 @@ def main(results: str, data: str, out: str, first_session: str = "2024-01-01", l
             nz = np.flatnonzero(proc["acc"])
             hvn = sw.top_hvn((nz + proc["base"]) * TICK, proc["acc"][nz], -1) if len(nz) >= 3 else None
             cx = close[g] * sg
-            if proc["armed"] and hvn is not None and cx < hvn[0] and not last_bar:
+            signal = proc["armed"] and hvn is not None and cx < hvn[0] and not last_bar
+            if TRACE is not None:
+                band = (None, None) if hvn is None else sorted((hvn[0] * sg, hvn[1] * sg))
+                TRACE.append({"process": proc["id"], "side": side, "level": proc["level"],
+                              "start_minute": int(minute[proc["start"]]), "touch_minute": int(minute[proc["touch"]]),
+                              "minute": int(minute[g]), "hvn_low": band[0], "hvn_high": band[1],
+                              "armed": proc["armed"], "signal": signal, "extreme": ext * sg})
+            if signal:
                 proc["armed"], proc["freeze"] = False, ext
                 proc["entries"] += 1
                 extreme = ext * sg
