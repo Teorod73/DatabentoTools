@@ -6,16 +6,18 @@ Written for a high (short), a low is mirrored.
 Levels: the 0.5 ZigZag highs and lows (TimeOfDay reference). A point is live from its confirmation until a trade above
 the high (below the low); every old point stays live (shifted by the roll spread at a contract change).
 Process: a bar touches a live high (high >= level; several in one bar: the highest). One process at a time, a new
-touch replaces it. The local profile starts at the 15th bar before the touch (not before the session start) and
-grows bar by bar (traded prices of the front contract, Prominence HVNs with Sigma Multiplier 0.41). Entry: a closed
-bar below the low edge of the highest HVN of the profile up to the previous bar -> short at its close. Then the
-signal pauses until a closed bar makes a high above the profile high at the last entry; at the next close below the
-highest HVN: nothing while the position of this process is open, a new short when it was closed (the profile always covers the
-start .. the current bar, only the signal pauses).
-Stop: the highest high since the profile start + BUFFER ticks (5, and 10 / 15 / 20 to measure the stops), fixed.
-Targets, each a separate run: 1R, 2R, 3R, the nearest live opposite blue point below the entry (none: no target),
-none. Exit at the 16:00 ET close at the latest. Costs: 1 tick slippage at the stop, 0.08 point commission. Exits from
-the 1 minute bars: a bar reaching the stop and the target counts as the stop.
+touch replaces it. The local profile starts at the 14th bar before the touch (as the NinjaTrader VolumeProfileTool
+drawn from the 15th, whose first bar is not counted; not before the session start) and grows bar by bar, the closed
+bar included (traded prices of the front contract, Prominence HVNs with Sigma Multiplier 0.41). Signal: a closed
+bearish bar (close < open) below the low edge of the highest HVN of the profile up to and including this bar -> short
+at the open of the next bar. Then the signal pauses until a closed bar makes a high above the profile high at the last
+signal; at the next signal: nothing while the position of this process is open, a new short when it was closed (the
+profile always covers the start .. the current bar, only the signal pauses).
+Stop: the highest high since the profile start up to the signal bar + BUFFER ticks (5, and 10 / 15 / 20 to measure
+the stops), fixed. Targets, each a separate run: 1R, 2R, 3R, none. Every open position is closed at an opposite blue
+point (a low under a short) at its price once the price trades 1 tick through it (a point seen live since the entry
+keeps its resting order even after an exact touch), and at the 16:00 ET close at the latest. Costs: 1 tick slippage at
+the stop, 0.08 point commission. Exits from the 1 minute bars: a bar reaching the stop and a target counts as the stop.
 The process ends when the price moves 10 x the 20 session average ATR1 of the part of day (20:00-09:30 and
 09:30-16:00 separately) away from the level up or down, at another touch, or at 16:00; an open position stays until
 its own exit, so positions of several processes can be open together. Touches and entries 20:00-16:00 ET only.
@@ -39,8 +41,8 @@ import zigzag as zz
 
 TICK = 0.25
 BUFFERS = (5, 10, 15, 20)
-TARGETS = ("1R", "2R", "3R", "opposite", "none")
-PRE_BARS = 15
+TARGETS = ("1R", "2R", "3R", "none")
+PRE_BARS = 14
 AWAY = 10.0
 ATR_SESSIONS = 20
 COMMISSION = 0.08
@@ -91,6 +93,8 @@ def main(results: str, data: str, out: str, first_session: str = "2024-01-01", l
     minutes = sw.MinuteProfiles(data)
     configs = [(bf, tg) for bf in BUFFERS for tg in TARGETS]
     positions: dict = {}                 # (configuration, process id) -> open position
+    pending: list[dict] = []             # signals of the previous bar, entered at this open
+    open_ = b.open.to_numpy(float)
     trades = []
     live: list[dict] = []
     proc = None
@@ -127,9 +131,36 @@ def main(results: str, data: str, out: str, first_session: str = "2024-01-01", l
         if not trading:
             proc = None
 
+        # entries at the open of the bar after a signal
+        for sig in pending:
+            for cfg in configs:
+                c = (cfg, sig["process"])
+                if c in positions:          # this process still holds a position in this configuration
+                    continue
+                side = sig["side"]
+                stop = sig["extreme"] - side * cfg[0] * TICK
+                entry = open_[g]
+                risk = (entry - stop) * side
+                if not risk > 0:
+                    continue
+                target = entry + side * int(cfg[1][0]) * risk if cfg[1] != "none" else None
+                positions[c] = {**sig, "entry_minute": int(minute[g]), "wait_bars": g - sig["touch"], "entry": entry,
+                                "stop": stop, "risk": risk, "target": target, "risk_atr": risk / sig["avg_atr1"],
+                                "entry_from_level_atr": (sig["level"] - entry) * -side / sig["avg_atr1"],
+                                "resting": None, "mfe": 0.0, "mae": 0.0}
+        pending = []
+
         # exits of the open positions on this bar
         for c, pos in list(positions.items()):
             side = pos["side"]
+            # opposite blue points live since the entry: the nearest one keeps a resting exit order
+            opp = [q["price"] for q in live if q["type"] == ("high" if side == 1 else "low")]
+            if pos["resting"] is not None:
+                opp.append(pos["resting"])
+            if opp:
+                pos["resting"] = min(opp) if side == 1 else max(opp)
+            hit_opposite = pos["resting"] is not None and (high[g] >= pos["resting"] + TICK if side == 1
+                                                           else low[g] <= pos["resting"] - TICK)
             fav = (high[g] - pos["entry"]) if side == 1 else (pos["entry"] - low[g])
             adv = (pos["entry"] - low[g]) if side == 1 else (high[g] - pos["entry"])
             pos["mfe"] = max(pos["mfe"], fav)
@@ -138,8 +169,10 @@ def main(results: str, data: str, out: str, first_session: str = "2024-01-01", l
             hit_target = pos["target"] is not None and (high[g] >= pos["target"] if side == 1 else low[g] <= pos["target"])
             if hit_stop:
                 close_position(c, pos, g, pos["stop"], "stop")
-            elif hit_target:
+            elif hit_target and (not hit_opposite or (pos["target"] - pos["resting"]) * side <= 0):
                 close_position(c, pos, g, pos["target"], "target")
+            elif hit_opposite:
+                close_position(c, pos, g, pos["resting"], "opposite")
             elif last_bar:
                 close_position(c, pos, g, close[g], "close")
 
@@ -172,10 +205,12 @@ def main(results: str, data: str, out: str, first_session: str = "2024-01-01", l
             ext = (high[proc["start"]:g + 1].max() if side == -1 else -low[proc["start"]:g + 1].min())
             if not proc["armed"] and hx_now > proc["freeze"]:
                 proc["armed"] = True
+            add_bar(proc, minute[g])           # the closed bar is part of the profile
             nz = np.flatnonzero(proc["acc"])
             hvn = sw.top_hvn((nz + proc["base"]) * TICK, proc["acc"][nz], -1) if len(nz) >= 3 else None
             cx = close[g] * sg
-            signal = proc["armed"] and hvn is not None and cx < hvn[0] and not last_bar
+            colour = close[g] < open_[g] if side == -1 else close[g] > open_[g]
+            signal = proc["armed"] and hvn is not None and cx < hvn[0] and colour and not last_bar
             if TRACE is not None:
                 band = (None, None) if hvn is None else sorted((hvn[0] * sg, hvn[1] * sg))
                 TRACE.append({"process": proc["id"], "side": side, "level": proc["level"],
@@ -185,34 +220,11 @@ def main(results: str, data: str, out: str, first_session: str = "2024-01-01", l
             if signal:
                 proc["armed"], proc["freeze"] = False, ext
                 proc["entries"] += 1
-                extreme = ext * sg
-                for cfg in configs:
-                    c = (cfg, proc["id"])
-                    if c in positions:          # this process still holds a position in this configuration
-                        continue
-                    stop = extreme - side * cfg[0] * TICK
-                    entry = close[g]
-                    risk = (entry - stop) * side
-                    if not risk > 0:
-                        continue
-                    if cfg[1] in ("1R", "2R", "3R"):
-                        target = entry + side * int(cfg[1][0]) * risk
-                    elif cfg[1] == "opposite":
-                        opp = [q["price"] for q in live if q["type"] == ("high" if side == 1 else "low")
-                               and (q["price"] - entry) * side > 0]
-                        target = (min(opp) if side == 1 else max(opp)) if opp else None
-                    else:
-                        target = None
-                    positions[c] = {"process": proc["id"], "n_in_process": proc["entries"], "session": s.date(),
-                                    "year": s.year, "part": parts[g], "side": side, "level": proc["level"],
-                                    "age": proc["age"], "touch_minute": int(minute[proc["touch"]]),
-                                    "entry_minute": int(minute[g]), "wait_bars": g - proc["touch"], "entry": entry,
-                                    "extreme": extreme, "stop": stop, "risk": risk, "target": target,
-                                    "avg_atr1": proc["avg"], "risk_atr": risk / proc["avg"],
-                                    "beyond_atr": (extreme - proc["level"]) * -side / proc["avg"],
-                                    "entry_from_level_atr": (proc["level"] - entry) * -side / proc["avg"],
-                                    "mfe": 0.0, "mae": 0.0}
-            add_bar(proc, minute[g])
+                pending.append({"process": proc["id"], "n_in_process": proc["entries"], "session": s.date(),
+                                "year": s.year, "part": parts[g], "side": side, "level": proc["level"],
+                                "age": proc["age"], "touch_minute": int(minute[proc["touch"]]), "touch": proc["touch"],
+                                "signal_minute": int(minute[g]), "extreme": ext * sg, "avg_atr1": proc["avg"],
+                                "beyond_atr": (ext * sg - proc["level"]) * -side / proc["avg"]})
             away = AWAY * proc["avg"]
             if last_bar or (not np.isnan(away) and (high[g] >= proc["level"] + away or low[g] <= proc["level"] - away)):
                 proc = None
@@ -237,14 +249,15 @@ def add_bar(proc: dict, m: int) -> None:
 def summary(t: pd.DataFrame, n_sessions: dict) -> str:
     lines = ["# Kék ZigZag-kisöprés helyi profillal (nyers szabály)", "",
              "Short a kék High-oknál, long a Low-oknál (a szabály a CLAUDE.md-ben és a szkript fejében). Nettó R ± 95% "
-             "(seanszonként klaszterezve); stop = a profil-kezdet óta mért szélsőérték + puffer tick; zárás legkésőbb "
-             "16:00. nyerés = R > 0.", ""]
+             "(seanszonként klaszterezve); belépés a jelzés utáni gyertya nyitóján; stop = a profil-kezdet óta mért "
+             "szélsőérték + puffer tick; zárás az ellentétes kék ponton (1 tickes átlépéssel) vagy legkésőbb 16:00-kor. "
+             "nyerés = R > 0.", ""]
     if t.empty:
         return "\n".join(lines) + "\nNincs kötés.\n"
     t = t.assign(weight=1.0)
     for part in ("night", "rth"):
         lines += [f"## {'Éjszaka' if part == 'night' else 'RTH'} (a belépés szerint)", "",
-                  "| puffer | cél | év | kötés | / nap | nyerés | stop | átlag R | össz R |", "|---|---|---|---|---|---|---|---|---|"]
+                  "| puffer | cél | év | kötés | / nap | nyerés | stop | ellentétes pont | átlag R | össz R |", "|---|---|---|---|---|---|---|---|---|---|"]
         for bf in BUFFERS:
             for tg in TARGETS:
                 for y in sorted(t.year.unique()):
@@ -253,11 +266,11 @@ def summary(t: pd.DataFrame, n_sessions: dict) -> str:
                         continue
                     m, band = pt.weighted(g, "r")
                     lines.append(f"| {bf} | {tg} | {y} | {len(g)} | {len(g) / n_sessions.get(y, 1):.2f} | "
-                                 f"{(g.r > 0).mean():.0%} | {(g.reason == 'stop').mean():.0%} | {m:+.3f} ±{band:.3f} | "
+                                 f"{(g.r > 0).mean():.0%} | {(g.reason == 'stop').mean():.0%} | {(g.reason == 'opposite').mean():.0%} | {m:+.3f} ±{band:.3f} | "
                                  f"{g.r.sum():+.0f} |")
         lines.append("")
     base = t[(t.buffer == 5) & (t.target_type == "none")]
-    lines += ["## Bontás (puffer 5 tick, cél nélkül, zárás 16:00-kor)", "", "Szint kora (seansz):", "",
+    lines += ["## Bontás (puffer 5 tick, cél nélkül)", "", "Szint kora (seansz):", "",
               "| rész | kor | év | kötés | átlag R |", "|---|---|---|---|---|"]
     bins = [-1, 0, 1, 5, 10, 20, 60, 10_000]
     labels = ["0", "1", "2-5", "6-10", "11-20", "21-60", ">60"]
