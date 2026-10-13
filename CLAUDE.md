@@ -396,6 +396,17 @@ High-ra leírva, Low tükrözve:
 - Kereskedés 20:00-16:00 ET (18:00-20:00 és 16:00-18:00 nincs). Mérni: a szint kora, a várakozás (érintéstől a
   belépésig, a szinttől való távolság az átlag-ATR1 egységében), hányadik belépés a folyamatban.
 
+- **A nyers szabály eredménye 2024-02 - 2025-12** (2026-10-13, `research/blue_sweep.py`, ResearchData
+  `results/blue_sweep/`): az öt felhasználói példa (2025-02-24 / 25) mind kötés, a várt módon (pl. 02-25 08:44
+  újrabelépés +3,9R, 02-24 04:40 +10R a 16:00-s zárásig). Összesen napi kb. 3 kötés éjszaka és 3 RTH-ban (5 tick).
+  Nettó R / kötés (5 tick): éjszaka 1R -0,06 / -0,01, 2R -0,03 / -0,03, 3R -0,06 / -0,02, ellentétes pont -0,04 / -0,13,
+  cél nélkül -0,11 / +0,16 (2024 / 2025); RTH 1R -0,04 / -0,02, 2R -0,06 / -0,06, 3R -0,08 / -0,10, cél nélkül
+  +0,08 / -0,08. A 20 tickes puffer sem jobb (1R éjszaka 0,00 / +0,02, RTH -0,08 / -0,05). 1R-nél a nyerési arány kb.
+  50%: a nyers szabály a költségek nélkül kb. véletlen. Utólagos bontás (5 tick, 2R): a szint kora 10 seansz fölött
+  éjszaka rossz (kevés kötés); éjszaka a csúcs alig túlnyúló (≤ 0,5 átlag-ATR1) eseteinél +0,12 / +0,16 (kb. 100 / év),
+  3-5 ATR1 túlnyúlásnál -0,21 / -0,26; a várakozás és a kockázat szerint nincs következetes minta. Ezek utólagos
+  bontások sok cella közül, a véletlen is adhatja őket.
+
 ## Nyitott kérdések, következő lépések
 
 - Élő próba NinjaTrader stratégiaként, sim számlán, egy pozícióval, 2026 októberétől.
