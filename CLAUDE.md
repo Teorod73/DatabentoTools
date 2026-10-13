@@ -407,6 +407,20 @@ High-ra leírva, Low tükrözve:
   3-5 ATR1 túlnyúlásnál -0,21 / -0,26; a várakozás és a kockázat szerint nincs következetes minta. Ezek utólagos
   bontások sok cella közül, a véletlen is adhatja őket.
 
+- **Módosítások (2026-10-13, a felhasználó döntése, a 3. / 4. példakép egyeztetése után):** (1) a profil a döntéskor
+  a záró gyertyát is tartalmazza; (2) a profil az érintés előtti 14. gyertyától indul (a NinjaTrader VolumeProfileTool a
+  húzás első gyertyáját nem számolja, a horgony a 15.); (3) short csak bearish, long csak bullish záró gyertyán (doji
+  nem), a rossz színű áttörés után a jelzés él tovább; (4) belépés a jelzés utáni gyertya nyitóján; (5) az ellentétes élő
+  kék pont 1 tickes átlépésekor minden nyitott pozíció zárul a pont árán (`opposite`), minden célváltozatban; a külön
+  „ellentétes pont” cél megszűnt. Időpontok: nálunk a gyertya a nyitó idejével szerepel, a NinjaTraderben a záróéval
+  (+1 perc). A két példa most a felhasználó kronológiáját adja (02-25 06:00 jelzés, 06:01 long 5980,50, stop 5977,25,
+  cél nélkül 06:38-kor 5989,50 +2,74R; 02-24 03:26 jelzés, long 6048,50, stop 6040,25, 04:04-kor 6063,50 +1,81R).
+- **Eredmény a módosított szabállyal** (2024 / 2025, nettó R / kötés, ±0,07-0,18): éjszaka 5 tick 1R -0,03 / 0,00,
+  2R -0,03 / -0,01, 3R -0,04 / +0,01, cél nélkül -0,03 / -0,11; 10 tick 2R +0,01 / +0,05 (a legjobb cella, a sávon
+  belül); RTH 5 tick 1R -0,04 / 0,00, 2R -0,05 / -0,07, 3R -0,10 / -0,11, cél nélkül -0,03 / -0,10, a nagyobb puffer sem
+  jobb. Napi kb. 2,5-3 kötés részenként, 1R nyerési arány 50-53%. Az ellentétes pont éjszaka a cél nélküli kötések
+  20-40%-át zárja, RTH-ban 8-12%-át. Lényegében változatlan: a nyers szabály költségek után nullszaldó körül van.
+
 ## Nyitott kérdések, következő lépések
 
 - Élő próba NinjaTrader stratégiaként, sim számlán, egy pozícióval, 2026 októberétől.
